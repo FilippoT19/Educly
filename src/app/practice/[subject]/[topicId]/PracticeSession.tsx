@@ -161,7 +161,7 @@ export function PracticeSession({
       {/* Header */}
       <header className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
         <Link
-          href="/dashboard"
+          href={`/course/${subject}`}
           className="inline-flex items-center justify-center rounded-lg size-8 hover:bg-muted transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
