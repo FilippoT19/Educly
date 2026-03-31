@@ -1,22 +1,26 @@
 {
   "name": "Educly",
   "short_name": "Educly",
-  "description": "Allenati con esercizi di Analisi corretti dall'AI",
+  "description": "Allenati con esercizi di Analisi 1 e 2 corretti dall'AI",
   "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#000000",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
+  "categories": ["education"],
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

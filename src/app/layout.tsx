@@ -13,8 +13,13 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "Educly",
+    startupImage: "/icon-512.png",
+  },
+  icons: {
+    apple: "/icon-192.png",
+    icon: "/icon-192.png",
   },
 };
 
@@ -32,7 +37,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="it" className={`${geistSans.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}`,
+          }}
+        />
+      </body>
     </html>
   );
 }
