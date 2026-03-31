@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { PDFDocument } from "pdf-lib";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -324,14 +325,32 @@ export default function AdminPage() {
     setAutoChapters((prev) => prev.filter((_, idx) => idx !== i));
   }
 
+  const [autoProgress, setAutoProgress] = useState<{ current: number; total: number } | null>(null);
+  const fullPdfRef = useRef<PDFDocument | null>(null);
+
   async function handleAnalyzeToc() {
     if (!autoFile) return;
     setAnalyzeStatus("processing");
-    setAnalyzeMsg("");
+    setAnalyzeMsg("Lettura PDF e analisi indice...");
     setAutoChapters([]);
-    const formData = new FormData();
-    formData.append("file", autoFile);
     try {
+      // Load and cache full PDF in memory
+      const arrayBuffer = await autoFile.arrayBuffer();
+      const fullPdf = await PDFDocument.load(arrayBuffer);
+      fullPdfRef.current = fullPdf;
+      const totalPages = fullPdf.getPageCount();
+
+      // Send only first 50 pages to keep payload small (TOC is always at the start)
+      const tocPageCount = Math.min(50, totalPages);
+      const tocPdf = await PDFDocument.create();
+      const tocPages = await tocPdf.copyPages(fullPdf, Array.from({ length: tocPageCount }, (_, i) => i));
+      tocPages.forEach((p) => tocPdf.addPage(p));
+      const tocBytes = await tocPdf.save();
+      const tocBlob = new Blob([tocBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+
+      const formData = new FormData();
+      formData.append("file", tocBlob, autoFile.name);
+
       const res = await fetch("/api/admin/analyze-toc", {
         method: "POST",
         headers: { "x-admin-secret": secret },
@@ -351,29 +370,75 @@ export default function AdminPage() {
   async function handleAutoBookProcess() {
     if (!autoFile || autoChapters.length === 0 || !bookTitle) return;
     setBookStatus("processing");
-    setBookMsg("");
-    const formData = new FormData();
-    formData.append("file", autoFile);
-    formData.append("bookTitle", bookTitle);
-    formData.append("subject", bookSubject);
-    formData.append("docType", bookDocType);
-    formData.append("engineering", bookEngineering);
-    formData.append("section", bookSection);
-    formData.append("chapters", JSON.stringify(autoChapters));
+    setBookMsg("Suddivisione capitoli nel browser...");
+    setAutoProgress(null);
     try {
-      const res = await fetch("/api/admin/process-book-auto", {
-        method: "POST",
-        headers: { "x-admin-secret": secret },
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      // Load full PDF (use cached if available)
+      let fullPdf = fullPdfRef.current;
+      if (!fullPdf) {
+        const arrayBuffer = await autoFile.arrayBuffer();
+        fullPdf = await PDFDocument.load(arrayBuffer);
+        fullPdfRef.current = fullPdf;
+      }
+      const totalPages = fullPdf.getPageCount();
+
+      let sourceDocumentId: string | null = null;
+      let totalExtracted = 0;
+      let lessonOrderStart = 1;
+
+      // Process each chapter individually (one request per chapter to stay within size limits)
+      for (let i = 0; i < autoChapters.length; i++) {
+        setAutoProgress({ current: i + 1, total: autoChapters.length });
+        setBookMsg(`Elaborazione capitolo ${i + 1} di ${autoChapters.length}: "${autoChapters[i].title}"...`);
+
+        const chapter = autoChapters[i];
+        const startPage = Math.max(0, Math.min(chapter.pdf_page_index, totalPages - 1));
+        const endPage = i < autoChapters.length - 1
+          ? Math.max(startPage, Math.min(autoChapters[i + 1].pdf_page_index - 1, totalPages - 1))
+          : totalPages - 1;
+
+        // Extract chapter pages as a standalone PDF
+        const chapterPdf = await PDFDocument.create();
+        const pageIndices = Array.from({ length: endPage - startPage + 1 }, (_, k) => startPage + k);
+        const copiedPages = await chapterPdf.copyPages(fullPdf, pageIndices);
+        copiedPages.forEach((p) => chapterPdf.addPage(p));
+        const chapterBytes = await chapterPdf.save();
+        const chapterBlob = new Blob([chapterBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+
+        const formData = new FormData();
+        formData.append("file", chapterBlob, `${chapter.title}.pdf`);
+        formData.append("bookTitle", bookTitle);
+        formData.append("chapterTitle", chapter.title);
+        formData.append("subject", bookSubject);
+        formData.append("docType", bookDocType);
+        formData.append("engineering", bookEngineering);
+        formData.append("section", bookSection);
+        formData.append("chapterIndex", String(i + 1));
+        formData.append("totalChapters", String(autoChapters.length));
+        formData.append("lessonOrderStart", String(lessonOrderStart));
+        if (sourceDocumentId) formData.append("sourceDocumentId", sourceDocumentId);
+
+        const res = await fetch("/api/admin/process-chapter", {
+          method: "POST",
+          headers: { "x-admin-secret": secret },
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `Errore capitolo ${i + 1}`);
+
+        sourceDocumentId = data.sourceDocumentId;
+        totalExtracted += data.extracted;
+        lessonOrderStart += data.extracted;
+      }
+
       const label = bookDocType === "libro_teoria" ? "lezioni" : "esercizi";
-      setBookMsg(`Libro processato: ${data.totalExtracted} ${label} estratti da ${autoChapters.length} capitoli.`);
+      setBookMsg(`Libro processato: ${totalExtracted} ${label} estratti da ${autoChapters.length} capitoli.`);
       setBookStatus("done");
+      setAutoProgress(null);
     } catch (err) {
       setBookMsg(err instanceof Error ? err.message : "Errore");
       setBookStatus("error");
+      setAutoProgress(null);
     }
   }
 
@@ -594,6 +659,21 @@ export default function AdminPage() {
                           ))}
                         </div>
 
+                        {autoProgress && (
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>Capitolo {autoProgress.current} di {autoProgress.total}</span>
+                              <span>{Math.round((autoProgress.current / autoProgress.total) * 100)}%</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                              <div
+                                className="h-full bg-primary transition-all duration-500"
+                                style={{ width: `${(autoProgress.current / autoProgress.total) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
                         <StatusBanner status={bookStatus} message={bookMsg} />
 
                         <Button
@@ -602,7 +682,7 @@ export default function AdminPage() {
                           disabled={!bookTitle || bookStatus === "processing"}
                         >
                           {bookStatus === "processing"
-                            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Elaborazione capitoli...</>
+                            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Elaborazione...</>
                             : <><Library className="h-4 w-4 mr-2" />Processa tutto il libro ({autoChapters.length} capitoli)</>}
                         </Button>
                       </div>
