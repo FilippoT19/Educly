@@ -9,24 +9,17 @@ const curricula: Record<string, typeof analisi1> = { analisi1, analisi2 };
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
-  }
+  if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
 
   const { subject, topicId } = await request.json();
 
   const curriculum = curricula[subject];
-  if (!curriculum) {
-    return NextResponse.json({ error: "Materia non trovata" }, { status: 400 });
-  }
+  if (!curriculum) return NextResponse.json({ error: "Materia non trovata" }, { status: 400 });
 
   const topic = curriculum.topics.find((t) => t.id === topicId);
-  if (!topic) {
-    return NextResponse.json({ error: "Argomento non trovato" }, { status: 400 });
-  }
+  if (!topic) return NextResponse.json({ error: "Argomento non trovato" }, { status: 400 });
 
-  // Get student stats to calibrate difficulty
+  // Compute adaptive difficulty
   const { data: stats } = await supabase
     .from("topic_stats")
     .select("*")
@@ -35,7 +28,6 @@ export async function POST(request: NextRequest) {
     .eq("topic_id", topicId)
     .single();
 
-  // Adaptive difficulty: start easy, increase as student improves
   let difficulty = 1;
   if (stats && stats.exercises_done >= 3) {
     const rate = stats.correct / stats.exercises_done;
@@ -43,7 +35,49 @@ export async function POST(request: NextRequest) {
     else if (rate >= 0.5) difficulty = 2;
   }
 
-  // Get full profile for context
+  // Get exercises already seen by this student
+  const { data: seen } = await supabase
+    .from("student_exercise_seen")
+    .select("exercise_id")
+    .eq("student_id", user.id);
+
+  const seenIds = (seen || []).map((s) => s.exercise_id);
+
+  // Try to fetch a pre-generated exercise from DB
+  let dbQuery = supabase
+    .from("exercises")
+    .select("*")
+    .eq("subject", subject)
+    .eq("topic_id", topicId)
+    .eq("difficulty", difficulty);
+
+  if (seenIds.length > 0) {
+    dbQuery = dbQuery.not("id", "in", `(${seenIds.join(",")})`);
+  }
+
+  const { data: dbExercises } = await dbQuery.limit(10);
+
+  if (dbExercises && dbExercises.length > 0) {
+    // Pick a random one from results
+    const picked = dbExercises[Math.floor(Math.random() * dbExercises.length)];
+
+    // Mark as seen
+    await supabase
+      .from("student_exercise_seen")
+      .upsert({ student_id: user.id, exercise_id: picked.id });
+
+    return NextResponse.json({
+      id: picked.id,
+      text: picked.question_latex,
+      solution: picked.solution_latex,
+      difficulty: picked.difficulty,
+      hints: picked.hints || [],
+      source: picked.source,
+      fromDb: true,
+    });
+  }
+
+  // Fallback: if DB is empty for this topic, generate with Claude
   const { data: allStats } = await supabase
     .from("topic_stats")
     .select("topic_id, exercises_done, correct, last_error_types")
@@ -54,14 +88,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const exercise = await generateExercise(
-      subject,
-      topicId,
-      topic.name,
-      topic.subtopics,
-      difficulty,
-      profile
+      subject, topicId, topic.name, topic.subtopics, difficulty, profile
     );
-    return NextResponse.json(exercise);
+    return NextResponse.json({ ...exercise, text: exercise.text, fromDb: false });
   } catch (err) {
     console.error("Exercise generation error:", err);
     return NextResponse.json({ error: "Errore nella generazione" }, { status: 500 });
