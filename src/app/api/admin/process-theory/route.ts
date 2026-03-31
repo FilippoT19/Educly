@@ -14,6 +14,8 @@ export async function POST(request: NextRequest) {
   const file = formData.get("file") as File;
   const subject = formData.get("subject") as string;
   const title = formData.get("title") as string;
+  const engineering = (formData.get("engineering") as string) || "tutti";
+  const section = (formData.get("section") as string) || "tutti";
 
   if (!file || !subject || !title) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
@@ -23,19 +25,14 @@ export async function POST(request: NextRequest) {
   const base64 = Buffer.from(arrayBuffer).toString("base64");
 
   try {
-    const lessons = await extractTheoryFromPdf(base64, subject);
+    const lessons = await extractTheoryFromPdf(base64, subject, {});
 
     const supabase = await createClient();
 
     // Save source document record
     const { data: doc } = await supabase
       .from("source_documents")
-      .insert({
-        subject,
-        doc_type: "libro_teoria",
-        title,
-        lessons_extracted: lessons.length,
-      })
+      .insert({ subject, doc_type: "libro_teoria", title, lessons_extracted: lessons.length, engineering, section })
       .select()
       .single();
 
@@ -49,6 +46,8 @@ export async function POST(request: NextRequest) {
         content_markdown: l.content_markdown,
         key_concepts: l.key_concepts,
         mini_quiz: l.mini_quiz,
+        engineering,
+        section,
       }))
     );
 

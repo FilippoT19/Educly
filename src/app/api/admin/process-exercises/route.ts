@@ -16,6 +16,8 @@ export async function POST(request: NextRequest) {
   const subject = formData.get("subject") as string;
   const source = formData.get("source") as string;
   const title = formData.get("title") as string;
+  const engineering = (formData.get("engineering") as string) || "tutti";
+  const section = (formData.get("section") as string) || "tutti";
   const year = formData.get("year") ? parseInt(formData.get("year") as string) : undefined;
 
   if (!file || !subject || !source || !title) {
@@ -27,14 +29,14 @@ export async function POST(request: NextRequest) {
   const base64 = Buffer.from(arrayBuffer).toString("base64");
 
   try {
-    const exercises = await extractExercisesFromPdf(base64, subject, source, year);
+    const exercises = await extractExercisesFromPdf(base64, subject, source, { sourceYear: year });
 
     const supabase = await createClient();
 
     // Save source document record
     const { data: doc } = await supabase
       .from("source_documents")
-      .insert({ subject, doc_type: source, title, year: year || null, exercises_extracted: exercises.length })
+      .insert({ subject, doc_type: source, title, year: year || null, exercises_extracted: exercises.length, engineering, section })
       .select()
       .single();
 
@@ -50,6 +52,8 @@ export async function POST(request: NextRequest) {
         solution_latex: e.solution_latex,
         hints: e.hints,
         tags: e.tags,
+        engineering,
+        section,
       }))
     );
 

@@ -36,17 +36,37 @@ function getTopicIds(subject: string) {
   return subject === "analisi1" ? TOPIC_IDS_ANALISI1 : TOPIC_IDS_ANALISI2;
 }
 
+export interface ExerciseOptions {
+  bookTitle?: string;
+  chapterTitle?: string;
+  chapterIndex?: number;
+  totalChapters?: number;
+  sourceYear?: number;
+}
+
+export interface TheoryOptions {
+  bookTitle?: string;
+  chapterTitle?: string;
+  chapterIndex?: number;
+  totalChapters?: number;
+}
+
 export async function extractExercisesFromPdf(
   pdfBase64: string,
   subject: string,
   source: string,
-  sourceYear?: number
+  options: ExerciseOptions = {}
 ): Promise<ExtractedExercise[]> {
   const topicIds = getTopicIds(subject);
   const subjectName = subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2";
+  const { bookTitle, chapterTitle, chapterIndex, totalChapters } = options;
+
+  const bookContext = bookTitle
+    ? `\nContesto: questo PDF fa parte del libro "${bookTitle}"${chapterTitle ? `, capitolo ${chapterIndex}/${totalChapters}: "${chapterTitle}"` : ""}. Tieni presente questo contesto per classificare correttamente gli esercizi nei topic giusti.\n`
+    : "";
 
   const prompt = `Sei un esperto di ${subjectName} al Politecnico italiano.
-
+${bookContext}
 Analizza questo documento (eserciziario o tema d'esame) ed estrai TUTTI gli esercizi che trovi.
 
 Per ogni esercizio restituisci:
@@ -101,13 +121,19 @@ Estrai tutti gli esercizi che riesci a trovare nel documento. Se la soluzione no
 
 export async function extractTheoryFromPdf(
   pdfBase64: string,
-  subject: string
+  subject: string,
+  options: TheoryOptions = {}
 ): Promise<ExtractedLesson[]> {
   const topicIds = getTopicIds(subject);
   const subjectName = subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2";
+  const { bookTitle, chapterTitle, chapterIndex, totalChapters } = options;
+
+  const bookContext = bookTitle
+    ? `\nContesto: questo PDF fa parte del libro "${bookTitle}"${chapterTitle ? `, capitolo ${chapterIndex}/${totalChapters}: "${chapterTitle}"` : ""}. È importante che le lezioni estratte riflettano i contenuti specifici di questo capitolo e siano coerenti con il resto del libro.\n`
+    : "";
 
   const prompt = `Sei un esperto di ${subjectName} al Politecnico italiano.
-
+${bookContext}
 Analizza questo libro/dispensa e crea lezioni di teoria strutturate.
 
 Per ogni capitolo/argomento principale crea UNA lezione con:
