@@ -19,11 +19,19 @@ export interface GeneratedExercise {
   hints: string[];
 }
 
+export interface CorrectionStep {
+  step: number;
+  label: string;       // e.g. "Impostazione dell'integrale"
+  correct: boolean;
+  comment: string;     // LaTeX-formatted explanation
+}
+
 export interface CorrectionResult {
   isCorrect: boolean;
   score: number; // 0-100
   errorTypes: string[];
-  feedback: string;
+  steps: CorrectionStep[];
+  solutionLatex: string;  // full correct solution in LaTeX
   whatToReview: string[];
 }
 
@@ -98,13 +106,22 @@ Analizza attentamente la soluzione e rispondi SOLO in formato JSON valido con qu
   "isCorrect": true/false,
   "score": numero da 0 a 100,
   "errorTypes": ["tipo di errore 1", "tipo di errore 2"],
-  "feedback": "spiegazione dettagliata di cosa ha fatto bene e dove ha sbagliato, con la soluzione corretta",
+  "steps": [
+    {
+      "step": 1,
+      "label": "nome del passaggio (es. Impostazione, Calcolo derivata, Risultato finale)",
+      "correct": true/false,
+      "comment": "spiegazione breve del passaggio usando LaTeX per le formule, es: Corretto: $\\\\frac{d}{dx}x^2 = 2x$. Oppure: Errore: hai scritto $x^3$ invece di $x^2$."
+    }
+  ],
+  "solutionLatex": "soluzione corretta completa passo-passo in LaTeX, usa $...$ per inline e $$...$$ per display",
   "whatToReview": ["argomento da ripassare 1", "argomento da ripassare 2"]
 }
 
-Per errorTypes usa categorie chiare come: "errore di calcolo", "errore di segno", "passaggio mancante", "formula sbagliata", "impostazione errata", "errore di integrazione", "errore di derivazione", ecc.
-
-Sii preciso e costruttivo nel feedback. Se l'esercizio è corretto, confermalo con entusiasmo.`;
+Regole:
+- Usa SEMPRE LaTeX per le formule matematiche nei campi comment e solutionLatex (es. $x^2$, $\\\\int_0^1$, $\\\\frac{a}{b}$)
+- Per errorTypes usa: "errore di calcolo", "errore di segno", "passaggio mancante", "formula sbagliata", "impostazione errata", "errore di integrazione", "errore di derivazione"
+- Sii preciso e costruttivo. Se corretto, confermalo con entusiasmo.`;
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",

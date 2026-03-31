@@ -17,7 +17,6 @@ import {
   BookOpen,
   ChevronDown,
   ChevronUp,
-  Trash2,
 } from "lucide-react";
 
 interface Topic {
@@ -37,11 +36,19 @@ interface Exercise {
   hints: string[];
 }
 
+interface CorrectionStep {
+  step: number;
+  label: string;
+  correct: boolean;
+  comment: string;
+}
+
 interface Correction {
   isCorrect: boolean;
   score: number;
   errorTypes: string[];
-  feedback: string;
+  steps: CorrectionStep[];
+  solutionLatex: string;
   whatToReview: string[];
 }
 
@@ -247,24 +254,11 @@ export function PracticeSession({
 
             {/* Drawing canvas */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">La tua soluzione</p>
-                <button
-                  onClick={() => canvasRef.current?.clear()}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Trash2 className="h-3 w-3" />
-                  Cancella tutto
-                </button>
-              </div>
+              <p className="text-sm font-medium">La tua soluzione</p>
               <DrawingCanvas
                 ref={canvasRef}
-                className="w-full rounded-xl border bg-white"
-                style={{ height: "360px" }}
+                className="w-full rounded-xl border"
               />
-              <p className="text-xs text-muted-foreground text-center">
-                Scrivi con Apple Pencil · Il dito non disegna
-              </p>
             </div>
 
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
@@ -320,15 +314,44 @@ export function PracticeSession({
               </div>
             )}
 
-            {/* AI Feedback */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Correzione dettagliata</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <MathText text={correction.feedback} className="text-sm leading-relaxed" />
-              </CardContent>
-            </Card>
+            {/* Step-by-step correction */}
+            {correction.steps && correction.steps.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Correzione passo per passo</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {correction.steps.map((s) => (
+                    <div key={s.step} className="flex gap-3">
+                      <div className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-0.5 ${
+                        s.correct ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
+                      }`}>
+                        {s.correct
+                          ? <CheckCircle className="h-4 w-4" />
+                          : <XCircle className="h-4 w-4" />
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium mb-0.5">{s.label}</p>
+                        <MathText text={s.comment} className="text-sm text-muted-foreground leading-relaxed" />
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Full solution */}
+            {correction.solutionLatex && (
+              <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Soluzione corretta</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <MathText text={correction.solutionLatex} className="text-sm leading-relaxed" />
+                </CardContent>
+              </Card>
+            )}
 
             {/* What to review */}
             {correction.whatToReview.length > 0 && (

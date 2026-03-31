@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       difficulty,
       exercise_text: exerciseText,
       solution_image_url: imageUrl,
-      ai_feedback: correction.feedback,
+      ai_feedback: correction.solutionLatex,
       error_types: correction.errorTypes,
       is_correct: correction.isCorrect,
     });
