@@ -2,8 +2,7 @@
   "permissions": {
     "allow": [
       "Read(//Users/filippotopinelli/Desktop/**)",
-      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
-      "Bash(npx create-next-app@latest educly-app --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-turbopack)"
+      "Bash"
     ]
   }
 }

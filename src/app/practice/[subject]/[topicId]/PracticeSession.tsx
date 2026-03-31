@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import { MathText } from "@/components/MathText";
+import { DrawingCanvas, DrawingCanvasRef } from "@/components/DrawingCanvas";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,13 +11,13 @@ import { Separator } from "@/components/ui/separator";
 import {
   ArrowLeft,
   RefreshCw,
-  Upload,
   CheckCircle,
   XCircle,
   Lightbulb,
   BookOpen,
   ChevronDown,
   ChevronUp,
+  Trash2,
 } from "lucide-react";
 
 interface Topic {
@@ -44,7 +45,7 @@ interface Correction {
   whatToReview: string[];
 }
 
-type Phase = "idle" | "loading_exercise" | "solving" | "uploading" | "feedback";
+type Phase = "idle" | "loading_exercise" | "solving" | "correcting" | "feedback";
 
 const DIFFICULTY_LABELS = ["", "Facile", "Medio", "Difficile"];
 const DIFFICULTY_COLORS = ["", "text-green-600", "text-yellow-600", "text-red-600"];
@@ -63,11 +64,10 @@ export function PracticeSession({
   const [phase, setPhase] = useState<Phase>("idle");
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [correction, setCorrection] = useState<Correction | null>(null);
-  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [canvasSnapshot, setCanvasSnapshot] = useState<string | null>(null);
   const [showHints, setShowHints] = useState(false);
   const [error, setError] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<DrawingCanvasRef>(null);
 
   const successRate =
     stats && stats.exercises_done > 0
@@ -78,8 +78,7 @@ export function PracticeSession({
     setPhase("loading_exercise");
     setExercise(null);
     setCorrection(null);
-    setUploadedImage(null);
-    setImagePreview(null);
+    setCanvasSnapshot(null);
     setShowHints(false);
     setError("");
 
@@ -98,23 +97,33 @@ export function PracticeSession({
     const data = await res.json();
     setExercise(data);
     setPhase("solving");
-  }
-
-  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadedImage(file);
-    const reader = new FileReader();
-    reader.onload = (ev) => setImagePreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    // Clear canvas for new exercise
+    setTimeout(() => canvasRef.current?.clear(), 50);
   }
 
   async function submitSolution() {
-    if (!uploadedImage || !exercise) return;
+    if (!exercise || !canvasRef.current) return;
 
-    setPhase("uploading");
+    if (canvasRef.current.isEmpty()) {
+      setError("Scrivi la soluzione prima di inviare.");
+      return;
+    }
+
     setError("");
+    setPhase("correcting");
+
+    // Export canvas as PNG blob
+    const blob = await canvasRef.current.exportPng();
+    if (!blob) {
+      setError("Errore nell'esportazione del disegno. Riprova.");
+      setPhase("solving");
+      return;
+    }
+
+    // Save snapshot for display in feedback
+    const reader = new FileReader();
+    reader.onload = (ev) => setCanvasSnapshot(ev.target?.result as string);
+    reader.readAsDataURL(blob);
 
     const formData = new FormData();
     formData.append("subject", subject);
@@ -122,7 +131,7 @@ export function PracticeSession({
     formData.append("topicName", topic.name);
     formData.append("exerciseText", exercise.text);
     formData.append("difficulty", String(exercise.difficulty));
-    formData.append("image", uploadedImage);
+    formData.append("image", blob, "solution.png");
 
     const res = await fetch("/api/exercise/correct", {
       method: "POST",
@@ -141,9 +150,9 @@ export function PracticeSession({
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="border-b px-4 py-3 flex items-center gap-3">
+      <header className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
         <Button variant="ghost" size="icon" asChild>
           <Link href="/dashboard">
             <ArrowLeft className="h-4 w-4" />
@@ -163,11 +172,11 @@ export function PracticeSession({
         )}
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+      <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full px-4 py-4 gap-4">
 
         {/* START STATE */}
         {phase === "idle" && (
-          <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
+          <div className="flex flex-col items-center justify-center flex-1 text-center gap-4">
             <BookOpen className="h-12 w-12 text-muted-foreground" />
             <div>
               <h2 className="text-lg font-semibold mb-1">Pronto ad allenarti?</h2>
@@ -183,15 +192,16 @@ export function PracticeSession({
 
         {/* LOADING */}
         {phase === "loading_exercise" && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <div className="flex flex-col items-center justify-center flex-1 gap-3">
             <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="text-muted-foreground">Generazione esercizio in corso...</p>
+            <p className="text-muted-foreground">Generazione esercizio...</p>
           </div>
         )}
 
-        {/* EXERCISE */}
-        {(phase === "solving" || phase === "uploading") && exercise && (
+        {/* EXERCISE + CANVAS */}
+        {(phase === "solving" || phase === "correcting") && exercise && (
           <>
+            {/* Exercise text */}
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
@@ -234,66 +244,42 @@ export function PracticeSession({
 
             <Separator />
 
-            {/* Upload solution */}
-            <div className="space-y-3">
-              <p className="text-sm font-medium">Carica la tua soluzione</p>
-              <p className="text-xs text-muted-foreground">
-                Risolvi l&apos;esercizio su GoodNotes, fai uno screenshot e caricalo qui.
-              </p>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageSelect}
-              />
-
-              {!imagePreview ? (
+            {/* Drawing canvas */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">La tua soluzione</p>
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-muted rounded-xl py-10 flex flex-col items-center gap-2 hover:border-primary transition-colors cursor-pointer"
+                  onClick={() => canvasRef.current?.clear()}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <Upload className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Tocca per caricare l&apos;immagine</p>
-                  <p className="text-xs text-muted-foreground">PNG, JPG, screenshot da GoodNotes</p>
+                  <Trash2 className="h-3 w-3" />
+                  Cancella tutto
                 </button>
-              ) : (
-                <div className="space-y-3">
-                  <div className="relative rounded-xl overflow-hidden border">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={imagePreview}
-                      alt="Soluzione caricata"
-                      className="w-full object-contain max-h-96"
-                    />
-                    <button
-                      onClick={() => {
-                        setUploadedImage(null);
-                        setImagePreview(null);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      }}
-                      className="absolute top-2 right-2 bg-background/80 rounded-full p-1 text-xs border"
-                    >
-                      Cambia
-                    </button>
-                  </div>
-                  <Button
-                    onClick={submitSolution}
-                    className="w-full"
-                    disabled={phase === "uploading"}
-                  >
-                    {phase === "uploading" ? (
-                      <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Correzione in corso...</>
-                    ) : (
-                      "Invia per correzione"
-                    )}
-                  </Button>
-                </div>
-              )}
+              </div>
+              <DrawingCanvas
+                ref={canvasRef}
+                className="w-full rounded-xl border bg-white"
+                style={{ height: "360px" }}
+              />
+              <p className="text-xs text-muted-foreground text-center">
+                Scrivi con Apple Pencil · Il dito non disegna
+              </p>
             </div>
 
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
+
+            <Button
+              size="lg"
+              className="w-full"
+              onClick={submitSolution}
+              disabled={phase === "correcting"}
+            >
+              {phase === "correcting" ? (
+                <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Correzione in corso...</>
+              ) : (
+                "Invia per correzione"
+              )}
+            </Button>
           </>
         )}
 
@@ -365,8 +351,8 @@ export function PracticeSession({
               </Card>
             )}
 
-            {/* Your solution */}
-            {imagePreview && (
+            {/* Snapshot of solution */}
+            {canvasSnapshot && (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">La tua soluzione</CardTitle>
@@ -374,7 +360,7 @@ export function PracticeSession({
                 <CardContent>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={imagePreview}
+                    src={canvasSnapshot}
                     alt="La tua soluzione"
                     className="w-full object-contain rounded-lg border max-h-64"
                   />
@@ -382,7 +368,6 @@ export function PracticeSession({
               </Card>
             )}
 
-            {/* Next exercise button */}
             <Button size="lg" className="w-full" onClick={loadExercise}>
               Prossimo esercizio
             </Button>
