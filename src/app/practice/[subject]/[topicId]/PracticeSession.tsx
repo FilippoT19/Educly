@@ -153,11 +153,12 @@ export function PracticeSession({
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center justify-center rounded-lg size-8 hover:bg-muted transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Link>
         <div className="flex-1">
           <p className="text-xs text-muted-foreground">{subjectName}</p>
           <h1 className="font-semibold leading-tight">{topic.name}</h1>

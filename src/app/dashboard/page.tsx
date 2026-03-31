@@ -134,17 +134,22 @@ export default async function DashboardPage() {
                             <p className="text-xs text-muted-foreground mt-1">Non ancora praticato</p>
                           )}
                         </div>
-                        <Button asChild size="sm" variant={done === 0 ? "default" : "outline"}>
-                          <Link href={`/practice/${curriculum.id}/${topic.id}`}>
-                            {done === 0 ? (
-                              <><Zap className="h-3 w-3 mr-1" /> Inizia</>
-                            ) : rate !== null && rate < 60 ? (
-                              <><TrendingUp className="h-3 w-3 mr-1" /> Riprova</>
-                            ) : (
-                              <><BookOpen className="h-3 w-3 mr-1" /> Pratica</>
-                            )}
-                          </Link>
-                        </Button>
+                        <Link
+                          href={`/practice/${curriculum.id}/${topic.id}`}
+                          className={`inline-flex items-center justify-center rounded-lg px-3 h-7 text-[0.8rem] font-medium transition-colors shrink-0 ${
+                            done === 0
+                              ? "bg-primary text-primary-foreground hover:opacity-90"
+                              : "border border-border bg-background hover:bg-muted"
+                          }`}
+                        >
+                          {done === 0 ? (
+                            <><Zap className="h-3 w-3 mr-1" /> Inizia</>
+                          ) : rate !== null && rate < 60 ? (
+                            <><TrendingUp className="h-3 w-3 mr-1" /> Riprova</>
+                          ) : (
+                            <><BookOpen className="h-3 w-3 mr-1" /> Pratica</>
+                          )}
+                        </Link>
                       </div>
                     </CardContent>
                   </Card>

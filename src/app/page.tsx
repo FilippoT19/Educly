@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 
 export default function Home() {
   return (
@@ -11,12 +10,18 @@ export default function Home() {
           Scopri dove sbagli, migliora argomento per argomento.
         </p>
         <div className="flex gap-3 justify-center">
-          <Button asChild size="lg">
-            <Link href="/signup">Inizia gratis</Link>
-          </Button>
-          <Button asChild variant="outline" size="lg">
-            <Link href="/login">Accedi</Link>
-          </Button>
+          <Link
+            href="/signup"
+            className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-5 h-9 text-sm font-medium transition-colors hover:opacity-90"
+          >
+            Inizia gratis
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex items-center justify-center rounded-lg border border-border bg-background px-5 h-9 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            Accedi
+          </Link>
         </div>
       </div>
     </main>
