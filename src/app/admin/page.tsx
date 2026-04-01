@@ -247,6 +247,8 @@ interface SourceDocument {
 export default function AdminPage() {
   const [secret, setSecret] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
 
   // ── Books ──────────────────────────────────────────────────────────────────
   const [books, setBooks] = useState<SourceDocument[]>([]);
@@ -294,6 +296,23 @@ export default function AdminPage() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loadingReview, setLoadingReview] = useState(false);
 
+  // ── Login ──────────────────────────────────────────────────────────────────
+  async function handleLogin() {
+    setAuthLoading(true);
+    setAuthError(false);
+    const res = await fetch("/api/admin/books", {
+      headers: { "x-admin-secret": secret },
+    });
+    setAuthLoading(false);
+    if (res.status === 401) {
+      setAuthError(true);
+    } else {
+      const data = await res.json();
+      setBooks(data.books || []);
+      setAuthenticated(true);
+    }
+  }
+
   // ── Load books ─────────────────────────────────────────────────────────────
   const loadBooks = useCallback(async () => {
     setLoadingBooks(true);
@@ -306,8 +325,8 @@ export default function AdminPage() {
   }, [secret]);
 
   useEffect(() => {
-    if (authenticated) loadBooks();
-  }, [authenticated, loadBooks]);
+    if (authenticated && books.length === 0) loadBooks();
+  }, [authenticated, books.length, loadBooks]);
 
   // ── Create book ────────────────────────────────────────────────────────────
   async function createBook() {
@@ -473,12 +492,17 @@ export default function AdminPage() {
               <Input
                 type="password"
                 value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && setAuthenticated(true)}
+                onChange={(e) => { setSecret(e.target.value); setAuthError(false); }}
+                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                 placeholder="Password"
+                className={authError ? "border-red-500" : ""}
               />
+              {authError && <p className="text-xs text-red-500 mt-1">Password errata.</p>}
             </Field>
-            <Button className="w-full" onClick={() => setAuthenticated(true)}>Accedi</Button>
+            <Button className="w-full" onClick={handleLogin} disabled={!secret || authLoading}>
+              {authLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Accedi
+            </Button>
           </CardContent>
         </Card>
       </div>
