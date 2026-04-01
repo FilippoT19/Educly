@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import { PDFDocument } from "pdf-lib";
-import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -279,15 +278,30 @@ export default function AdminPage() {
     setChapters((prev) => prev.map((ch, idx) => idx === i ? { ...ch, ...patch } : ch));
   }
 
-  // Upload a File to Supabase Storage tmp-pdfs bucket, return the storage path
+  // Get a signed upload URL from the API, then upload directly to Supabase Storage.
+  // This bypasses Vercel entirely — the file goes browser → Supabase directly.
   async function uploadToStorage(file: File, label: string): Promise<string> {
-    const supabase = createClient();
-    const path = `admin/${Date.now()}-${label.replace(/[^a-z0-9]/gi, "_")}.pdf`;
-    const { error } = await supabase.storage.from("tmp-pdfs").upload(path, file, {
-      contentType: "application/pdf",
-      upsert: true,
+    // 1. Ask the API for a signed upload URL
+    const urlRes = await fetch("/api/admin/storage-upload-url", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-secret": secret },
+      body: JSON.stringify({ filename: `${label}.pdf` }),
     });
-    if (error) throw new Error(`Upload storage fallito: ${error.message}`);
+    if (!urlRes.ok) {
+      const err = await urlRes.json().catch(() => ({}));
+      throw new Error(`Signed URL error: ${err.error || urlRes.statusText}`);
+    }
+    const { signedUrl, path } = await urlRes.json();
+
+    // 2. Upload directly to Supabase Storage using the signed URL (no Vercel involvement)
+    const uploadRes = await fetch(signedUrl, {
+      method: "PUT",
+      headers: { "content-type": "application/pdf" },
+      body: file,
+    });
+    if (!uploadRes.ok) {
+      throw new Error(`Upload fallito: ${uploadRes.status} ${uploadRes.statusText}`);
+    }
     return path;
   }
 
