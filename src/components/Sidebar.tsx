@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useTheme } from "next-themes";
 import {
   BookOpen,
   LayoutDashboard,
@@ -15,6 +16,8 @@ import {
   GraduationCap,
   Menu,
   X,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -85,6 +88,7 @@ const NAV = [
 function SidebarContent({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const activeSubject = COURSES.find((c) => pathname.includes(`/course/${c.id}`));
+  const { resolvedTheme, setTheme } = useTheme();
 
   return (
     <div className="flex flex-col h-full">
@@ -174,7 +178,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
       {/* Bottom: subject quick-actions if active */}
       {activeSubject && (
-        <div className="p-3 border-t">
+        <div className="px-3 pt-2 border-t">
           <p className="text-xs text-muted-foreground px-2 mb-1">{activeSubject.name}</p>
           {["Esercizi", "Teoria", "Simulazione", "Esame"].map((s) => (
             <Link
@@ -194,6 +198,20 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           ))}
         </div>
       )}
+
+      {/* Theme toggle */}
+      <div className="p-3 border-t mt-auto">
+        <button
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          {resolvedTheme === "dark"
+            ? <Sun className="h-4 w-4 shrink-0" />
+            : <Moon className="h-4 w-4 shrink-0" />
+          }
+          {resolvedTheme === "dark" ? "Modalità chiara" : "Modalità scura"}
+        </button>
+      </div>
     </div>
   );
 }

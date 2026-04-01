@@ -9,7 +9,7 @@ import {
   forwardRef,
 } from "react";
 import { getStroke } from "perfect-freehand";
-import { Eraser, Pen, Trash2 } from "lucide-react";
+import { Eraser, Pen, Trash2, Moon, Sun } from "lucide-react";
 
 interface Point {
   x: number;
@@ -30,10 +30,16 @@ export interface DrawingCanvasRef {
   isEmpty: () => boolean;
 }
 
-const COLORS = ["#1a1a1a", "#e53e3e", "#2563eb", "#16a34a", "#9333ea"];
+const COLORS_LIGHT = ["#1a1a1a", "#e53e3e", "#2563eb", "#16a34a", "#9333ea"];
+const COLORS_DARK  = ["#ffffff", "#f87171", "#60a5fa", "#4ade80", "#c084fc"];
 const SIZES = [2, 4, 7, 12];
-const CANVAS_HEIGHT = 2400; // long enough for most exercises
+const CANVAS_HEIGHT = 2400;
 const GRID_SIZE = 28;
+
+const BG_LIGHT   = "#ffffff";
+const BG_DARK    = "#0d1526";
+const GRID_LIGHT = "#e5e7eb";
+const GRID_DARK  = "rgba(255,255,255,0.06)";
 
 function getSvgPathFromStroke(stroke: number[][]): string {
   if (!stroke.length) return "";
@@ -49,23 +55,16 @@ function getSvgPathFromStroke(stroke: number[][]): string {
   return d.join(" ");
 }
 
-function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, dpr: number) {
+function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, dpr: number, darkCanvas: boolean) {
   ctx.save();
-  ctx.strokeStyle = "#e5e7eb";
+  ctx.strokeStyle = darkCanvas ? GRID_DARK : GRID_LIGHT;
   ctx.lineWidth = 1 / dpr;
-
   const step = GRID_SIZE;
   for (let x = 0; x <= width; x += step) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
   }
   for (let y = 0; y <= height; y += step) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
   }
   ctx.restore();
 }
@@ -81,17 +80,25 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
     const canvasWidthRef = useRef(0);
 
     const [tool, setTool] = useState<"pen" | "eraser">("pen");
-    const [color, setColor] = useState(COLORS[0]);
-    const [size, setSize] = useState(SIZES[1]);
+    const [darkCanvas, setDarkCanvas] = useState(false);
     const [isEmpty, setIsEmpty] = useState(true);
+
+    const COLORS = darkCanvas ? COLORS_DARK : COLORS_LIGHT;
+    const [color, setColor] = useState(COLORS_LIGHT[0]);
+
+    // When canvas dark mode changes, swap pen color between black/white
+    useEffect(() => {
+      setColor(darkCanvas ? COLORS_DARK[0] : COLORS_LIGHT[0]);
+    }, [darkCanvas]);
+
+    const [size, setSize] = useState(SIZES[1]);
 
     useImperativeHandle(ref, () => ({
       exportPng: async () => {
         const canvas = canvasRef.current;
         if (!canvas) return null;
-        // Export only the portion with content + some padding
         const lastStroke = strokesRef.current[strokesRef.current.length - 1];
-        let maxY = 600; // minimum export height
+        let maxY = 600;
         if (lastStroke) {
           const ys = lastStroke.points.map((p) => p.y);
           maxY = Math.min(Math.max(...ys) + 100, CANVAS_HEIGHT);
@@ -123,11 +130,12 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
       if (!ctx) return;
       const dpr = dprRef.current;
       const w = canvasWidthRef.current;
+      const isDark = darkCanvas;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = isDark ? BG_DARK : BG_LIGHT;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      drawGrid(ctx, w, CANVAS_HEIGHT, dpr);
+      drawGrid(ctx, w, CANVAS_HEIGHT, dpr, isDark);
 
       for (const stroke of strokesRef.current) {
         const outlinePoints = getStroke(stroke.points, {
@@ -144,19 +152,17 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
           ctx.fillStyle = "rgba(0,0,0,1)";
           ctx.fill(path);
           ctx.restore();
-          // Redraw grid over erased area
-          ctx.save();
-          ctx.globalCompositeOperation = "source-over";
-          // We let the grid show through — no need to redraw, grid is always base
-          ctx.restore();
         } else {
           ctx.fillStyle = stroke.color;
           ctx.fill(path);
         }
       }
-    }, []);
+    }, [darkCanvas]);
 
-    // Init canvas size
+    useEffect(() => {
+      redraw();
+    }, [darkCanvas, redraw]);
+
     useEffect(() => {
       const canvas = canvasRef.current;
       const container = containerRef.current;
@@ -191,7 +197,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
     }
 
     function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
-      if (e.pointerType === "touch") return; // palm rejection
+      if (e.pointerType === "touch") return;
       e.preventDefault();
       canvasRef.current?.setPointerCapture(e.pointerId);
       isDrawingRef.current = true;
@@ -202,7 +208,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
     function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
       if (!isDrawingRef.current) return;
       e.preventDefault();
-
       const events = e.nativeEvent.getCoalescedEvents?.() ?? [e.nativeEvent];
       for (const ev of events) {
         currentStrokeRef.current.push(getPos(ev));
@@ -211,10 +216,8 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext("2d");
       if (!canvas || !ctx) return;
-
       redraw();
 
-      // Draw in-progress stroke
       const outlinePoints = getStroke(currentStrokeRef.current, {
         size: tool === "eraser" ? size * 3 : size,
         thinning: tool === "eraser" ? 0 : 0.5,
@@ -239,7 +242,6 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
       if (!isDrawingRef.current) return;
       e.preventDefault();
       isDrawingRef.current = false;
-
       if (currentStrokeRef.current.length > 0) {
         strokesRef.current.push({
           points: [...currentStrokeRef.current],
@@ -252,29 +254,35 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
       }
     }
 
+    const toolbarBg = darkCanvas ? "bg-[#0a1020] border-white/10" : "bg-gray-50 border-gray-200";
+    const toolbarText = darkCanvas ? "text-gray-300" : "text-gray-600";
+    const btnActive = darkCanvas ? "bg-white/15 border-white/20 text-white" : "bg-white shadow-sm border text-gray-800";
+    const btnHover = darkCanvas ? "hover:bg-white/10" : "hover:bg-gray-200";
+    const divider = darkCanvas ? "bg-white/15" : "bg-gray-300";
+
     return (
       <div className={className}>
         {/* Toolbar */}
-        <div className="flex items-center gap-3 px-3 py-2 border-b bg-gray-50 rounded-t-xl flex-wrap">
+        <div className={`flex items-center gap-3 px-3 py-2 border-b rounded-t-xl flex-wrap ${toolbarBg} ${toolbarText}`}>
           {/* Pen / Eraser */}
           <div className="flex gap-1">
             <button
               onClick={() => setTool("pen")}
-              className={`p-1.5 rounded-md transition-colors ${tool === "pen" ? "bg-white shadow-sm border" : "hover:bg-gray-200"}`}
+              className={`p-1.5 rounded-md transition-colors ${tool === "pen" ? btnActive : btnHover}`}
               title="Penna"
             >
               <Pen className="h-4 w-4" />
             </button>
             <button
               onClick={() => setTool("eraser")}
-              className={`p-1.5 rounded-md transition-colors ${tool === "eraser" ? "bg-white shadow-sm border" : "hover:bg-gray-200"}`}
+              className={`p-1.5 rounded-md transition-colors ${tool === "eraser" ? btnActive : btnHover}`}
               title="Gomma"
             >
               <Eraser className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="h-4 w-px bg-gray-300" />
+          <div className={`h-4 w-px ${divider}`} />
 
           {/* Colors */}
           {tool === "pen" && (
@@ -285,13 +293,12 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
                   onClick={() => setColor(c)}
                   className={`w-5 h-5 rounded-full transition-transform ${color === c ? "scale-125 ring-2 ring-offset-1 ring-gray-400" : ""}`}
                   style={{ backgroundColor: c }}
-                  title={c}
                 />
               ))}
             </div>
           )}
 
-          {tool === "pen" && <div className="h-4 w-px bg-gray-300" />}
+          {tool === "pen" && <div className={`h-4 w-px ${divider}`} />}
 
           {/* Size */}
           <div className="flex gap-1.5 items-center">
@@ -299,22 +306,32 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
               <button
                 key={s}
                 onClick={() => setSize(s)}
-                className={`flex items-center justify-center w-6 h-6 rounded-md transition-colors ${size === s ? "bg-white shadow-sm border" : "hover:bg-gray-200"}`}
-                title={`Spessore ${s}`}
+                className={`flex items-center justify-center w-6 h-6 rounded-md transition-colors ${size === s ? btnActive : btnHover}`}
               >
                 <div
-                  className="rounded-full bg-current"
+                  className="rounded-full"
                   style={{
                     width: Math.min(s * 2.5, 16),
                     height: Math.min(s * 2.5, 16),
-                    color: tool === "pen" ? color : "#666",
+                    backgroundColor: tool === "pen" ? color : (darkCanvas ? "#888" : "#666"),
                   }}
                 />
               </button>
             ))}
           </div>
 
-          <div className="h-4 w-px bg-gray-300 ml-auto" />
+          <div className={`h-4 w-px ${divider} ml-auto`} />
+
+          {/* Canvas dark mode toggle */}
+          <button
+            onClick={() => setDarkCanvas(!darkCanvas)}
+            className={`flex items-center gap-1 text-xs p-1.5 rounded-md transition-colors ${darkCanvas ? btnActive : btnHover}`}
+            title={darkCanvas ? "Sfondo chiaro" : "Sfondo scuro"}
+          >
+            {darkCanvas ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          </button>
+
+          <div className={`h-4 w-px ${divider}`} />
 
           {/* Clear */}
           <button
@@ -324,7 +341,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
               setIsEmpty(true);
               redraw();
             }}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors p-1.5 rounded-md hover:bg-red-50"
+            className={`flex items-center gap-1 text-xs p-1.5 rounded-md transition-colors hover:text-red-500 ${btnHover}`}
             title="Cancella tutto"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -335,8 +352,12 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
         {/* Scrollable canvas area */}
         <div
           ref={containerRef}
-          className="overflow-y-auto rounded-b-xl border-x border-b"
-          style={{ height: fillHeight ? "100%" : "420px", touchAction: "pan-y" }}
+          className="overflow-y-auto rounded-b-xl"
+          style={{
+            height: fillHeight ? "100%" : "420px",
+            touchAction: "pan-y",
+            backgroundColor: darkCanvas ? BG_DARK : BG_LIGHT,
+          }}
         >
           <canvas
             ref={canvasRef}
@@ -352,7 +373,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
           />
         </div>
 
-        <p className="text-xs text-muted-foreground text-center mt-1.5">
+        <p className={`text-xs text-center mt-1.5 ${darkCanvas ? "text-gray-500" : "text-muted-foreground"}`}>
           Apple Pencil per scrivere · Scorri con il dito per navigare
         </p>
       </div>
