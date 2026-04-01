@@ -70,8 +70,8 @@ function drawGrid(ctx: CanvasRenderingContext2D, width: number, height: number, 
   ctx.restore();
 }
 
-export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string }>(
-  function DrawingCanvas({ className }, ref) {
+export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; fillHeight?: boolean }>(
+  function DrawingCanvas({ className, fillHeight }, ref) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const strokesRef = useRef<Stroke[]>([]);
@@ -336,7 +336,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string }
         <div
           ref={containerRef}
           className="overflow-y-auto rounded-b-xl border-x border-b"
-          style={{ height: "420px", touchAction: "pan-y" }}
+          style={{ height: fillHeight ? "100%" : "420px", touchAction: "pan-y" }}
         >
           <canvas
             ref={canvasRef}
