@@ -1,93 +1,104 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useCallback, useId } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import {
   Upload, CheckCircle, AlertCircle, Loader2,
-  BookOpen, PenLine, Eye, Pencil, Trash2, Save, X, Plus, Library, ChevronRight,
+  BookOpen, PenLine, Eye, Pencil, Trash2, Save, X, Plus,
+  Library, ChevronRight, ArrowLeft, BookMarked, FolderOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MathText } from "@/components/MathText";
 
+// ── Types ──────────────────────────────────────────────────────────────────────
 type Status = "idle" | "uploading" | "processing" | "done" | "error";
 
+interface SourceDocument {
+  id: string;
+  title: string;
+  subject: string;
+  doc_type: string;
+  engineering: string;
+  section: string;
+}
+
+interface ProcessedEntry {
+  chapterTitle: string;
+  extracted: number;
+  label: string;
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 const SUBJECTS = [
   { id: "analisi1", name: "Analisi 1" },
   { id: "analisi2", name: "Analisi 2" },
 ];
 
 const ENGINEERING_OPTIONS = [
-  "tutti",
-  "Ingegneria Fisica",
-  "Ingegneria Informatica",
-  "Ingegneria Meccanica",
-  "Ingegneria Civile",
-  "Ingegneria Elettronica",
-  "Ingegneria Energetica",
-  "Ingegneria Aerospaziale",
-  "Ingegneria Biomedica",
-  "Ingegneria Matematica",
+  "tutti", "Ingegneria Fisica", "Ingegneria Informatica", "Ingegneria Meccanica",
+  "Ingegneria Civile", "Ingegneria Elettronica", "Ingegneria Energetica",
+  "Ingegneria Aerospaziale", "Ingegneria Biomedica", "Ingegneria Matematica",
 ];
 
 const SECTIONS = ["tutti", "AM", "MZ", "A", "B", "C", "D"];
-
 const EXERCISE_SOURCES = [
   { id: "eserciziario", name: "Eserciziario" },
   { id: "tema_passato", name: "Tema d'esame passato" },
   { id: "dispensa", name: "Dispensa con esercizi" },
 ];
-
 const DIFFICULTY_LABELS: Record<number, string> = { 1: "Facile", 2: "Medio", 3: "Difficile" };
 
-// ── shared field component ────────────────────────────────────────────────────
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+const DOC_TYPE_LABELS: Record<string, string> = {
+  libro_teoria: "Teoria",
+  eserciziario: "Esercizi",
+  tema_passato: "Temi d'esame",
+  dispensa: "Dispensa",
+};
+
+// ── Shared UI ─────────────────────────────────────────────────────────────────
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
       <Label>{label}</Label>
       {children}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
 
-function NativeSelect({
-  value, onChange, options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
+function NativeSelect({ value, onChange, options }: {
+  value: string; onChange: (v: string) => void;
   options: { id: string; name: string }[];
 }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-    >
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm">
       {options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
     </select>
   );
 }
 
-function FileUploadZone({ file, onChange }: { file: File | null; onChange: (f: File | null) => void }) {
+function FilePickerRow({ file, onChange, disabled }: {
+  file: File | null; onChange: (f: File | null) => void; disabled?: boolean;
+}) {
   return (
     <label className={cn(
-      "flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-xl cursor-pointer transition-colors",
-      file ? "border-primary bg-primary/5" : "border-muted hover:border-primary/50 hover:bg-muted/30"
+      "flex items-center gap-2.5 px-3 py-2.5 border-2 border-dashed rounded-xl cursor-pointer transition-colors text-sm",
+      disabled ? "opacity-50 cursor-not-allowed" : "",
+      file ? "border-primary bg-primary/5 text-primary" : "border-muted hover:border-primary/40 hover:bg-muted/20 text-muted-foreground"
     )}>
-      <input type="file" accept=".pdf" className="hidden" onChange={(e) => onChange(e.target.files?.[0] || null)} />
-      <Upload className={cn("h-5 w-5 mb-1.5", file ? "text-primary" : "text-muted-foreground")} />
+      <input type="file" accept=".pdf" className="hidden" disabled={disabled}
+        onChange={(e) => onChange(e.target.files?.[0] || null)} />
+      <Upload className="h-4 w-4 shrink-0" />
       {file ? (
-        <div className="text-center">
-          <p className="text-sm font-medium text-primary">{file.name}</p>
-          <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
-        </div>
+        <span className="truncate font-medium">{file.name} <span className="font-normal opacity-60">({(file.size / 1024 / 1024).toFixed(1)} MB)</span></span>
       ) : (
-        <p className="text-sm text-muted-foreground">Trascina il PDF o clicca per selezionarlo</p>
+        <span>Seleziona PDF…</span>
       )}
     </label>
   );
@@ -98,16 +109,18 @@ function StatusBanner({ status, message }: { status: Status; message?: string })
   return (
     <div className={cn(
       "flex items-center gap-3 p-3 rounded-xl border text-sm",
-      status === "processing" || status === "uploading" ? "bg-blue-50 border-blue-200 text-blue-800"
-        : status === "done" ? "bg-green-50 border-green-200 text-green-800"
-        : "bg-red-50 border-red-200 text-red-800"
+      status === "processing" || status === "uploading"
+        ? "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300"
+        : status === "done"
+        ? "bg-green-50 border-green-200 text-green-800 dark:bg-green-950/30 dark:border-green-800 dark:text-green-300"
+        : "bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300"
     )}>
       {(status === "processing" || status === "uploading") && <Loader2 className="h-4 w-4 animate-spin shrink-0" />}
       {status === "done" && <CheckCircle className="h-4 w-4 shrink-0" />}
       {status === "error" && <AlertCircle className="h-4 w-4 shrink-0" />}
       <span>
-        {status === "uploading" && "Caricamento su Supabase Storage..."}
-        {status === "processing" && "Claude sta analizzando il PDF — può richiedere 1–2 minuti..."}
+        {status === "uploading" && "Caricamento file…"}
+        {status === "processing" && "Claude sta analizzando il PDF — 1–3 minuti…"}
         {status === "done" && (message || "Completato!")}
         {status === "error" && (message || "Errore durante il processing.")}
       </span>
@@ -115,26 +128,46 @@ function StatusBanner({ status, message }: { status: Status; message?: string })
   );
 }
 
-// ── Exercise editor ───────────────────────────────────────────────────────────
-interface Exercise {
-  id: string;
-  topic_id: string;
-  difficulty: number;
-  source: string;
-  question_latex: string;
-  solution_latex: string;
-  hints: string[];
-  engineering: string;
-  section: string;
+// ── Resource card ─────────────────────────────────────────────────────────────
+function ResourceCard({ resource, onClick }: { resource: SourceDocument; onClick: () => void }) {
+  const icon = resource.doc_type === "libro_teoria"
+    ? <BookMarked className="h-5 w-5" />
+    : <FolderOpen className="h-5 w-5" />;
+
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-left group rounded-2xl border bg-card p-4 hover:border-primary/40 hover:shadow-sm transition-all space-y-3"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="p-2 rounded-xl bg-primary/8 text-primary">{icon}</div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors mt-1 shrink-0" />
+      </div>
+      <div>
+        <p className="font-semibold text-sm leading-snug line-clamp-2">{resource.title}</p>
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          <Badge variant="secondary" className="text-xs">{resource.subject}</Badge>
+          <Badge variant="outline" className="text-xs">{DOC_TYPE_LABELS[resource.doc_type] ?? resource.doc_type}</Badge>
+          {resource.engineering !== "tutti" && (
+            <Badge variant="outline" className="text-xs truncate max-w-[140px]">{resource.engineering}</Badge>
+          )}
+          {resource.section !== "tutti" && (
+            <Badge variant="outline" className="text-xs">Scaglione {resource.section}</Badge>
+          )}
+        </div>
+      </div>
+    </button>
+  );
 }
 
-function ExerciseCard({
-  ex, secret, onDelete,
-}: {
-  ex: Exercise;
-  secret: string;
-  onDelete: (id: string) => void;
-}) {
+// ── Exercise editor ───────────────────────────────────────────────────────────
+interface Exercise {
+  id: string; topic_id: string; difficulty: number; source: string;
+  question_latex: string; solution_latex: string; hints: string[];
+  engineering: string; section: string;
+}
+
+function ExerciseCard({ ex, secret, onDelete }: { ex: Exercise; secret: string; onDelete: (id: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(ex);
   const [saving, setSaving] = useState(false);
@@ -146,16 +179,12 @@ function ExerciseCard({
       headers: { "content-type": "application/json", "x-admin-secret": secret },
       body: JSON.stringify(form),
     });
-    setSaving(false);
-    setEditing(false);
+    setSaving(false); setEditing(false);
   }
 
   async function del() {
     if (!confirm("Eliminare questo esercizio?")) return;
-    await fetch(`/api/admin/exercises/${ex.id}`, {
-      method: "DELETE",
-      headers: { "x-admin-secret": secret },
-    });
+    await fetch(`/api/admin/exercises/${ex.id}`, { method: "DELETE", headers: { "x-admin-secret": secret } });
     onDelete(ex.id);
   }
 
@@ -172,47 +201,31 @@ function ExerciseCard({
             <button onClick={() => setEditing(!editing)} className="p-1.5 rounded hover:bg-muted">
               {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
             </button>
-            <button onClick={del} className="p-1.5 rounded hover:bg-red-50 text-red-500">
-              <Trash2 className="h-4 w-4" />
-            </button>
+            <button onClick={del} className="p-1.5 rounded hover:bg-red-50 text-red-500"><Trash2 className="h-4 w-4" /></button>
           </div>
         </div>
-
         {editing ? (
           <div className="space-y-3">
             <Field label="Domanda (LaTeX)">
-              <textarea
-                className="w-full border rounded-md px-3 py-2 text-sm font-mono min-h-24 resize-y"
-                value={form.question_latex}
-                onChange={(e) => setForm({ ...form, question_latex: e.target.value })}
-              />
+              <textarea className="w-full border rounded-md px-3 py-2 text-sm font-mono min-h-24 resize-y"
+                value={form.question_latex} onChange={(e) => setForm({ ...form, question_latex: e.target.value })} />
             </Field>
             <Field label="Soluzione (LaTeX)">
-              <textarea
-                className="w-full border rounded-md px-3 py-2 text-sm font-mono min-h-32 resize-y"
-                value={form.solution_latex}
-                onChange={(e) => setForm({ ...form, solution_latex: e.target.value })}
-              />
+              <textarea className="w-full border rounded-md px-3 py-2 text-sm font-mono min-h-32 resize-y"
+                value={form.solution_latex} onChange={(e) => setForm({ ...form, solution_latex: e.target.value })} />
             </Field>
             <div className="grid grid-cols-2 gap-2">
               <Field label="Difficoltà">
-                <NativeSelect
-                  value={String(form.difficulty)}
-                  onChange={(v) => setForm({ ...form, difficulty: parseInt(v) })}
-                  options={[{ id: "1", name: "Facile" }, { id: "2", name: "Medio" }, { id: "3", name: "Difficile" }]}
-                />
+                <NativeSelect value={String(form.difficulty)} onChange={(v) => setForm({ ...form, difficulty: parseInt(v) })}
+                  options={[{ id: "1", name: "Facile" }, { id: "2", name: "Medio" }, { id: "3", name: "Difficile" }]} />
               </Field>
               <Field label="Ingegneria">
-                <NativeSelect
-                  value={form.engineering}
-                  onChange={(v) => setForm({ ...form, engineering: v })}
-                  options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))}
-                />
+                <NativeSelect value={form.engineering} onChange={(v) => setForm({ ...form, engineering: v })}
+                  options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))} />
               </Field>
             </div>
             <Button size="sm" onClick={save} disabled={saving}>
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-              Salva
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}Salva
             </Button>
           </div>
         ) : (
@@ -233,46 +246,42 @@ function ExerciseCard({
   );
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface SourceDocument {
-  id: string;
-  title: string;
-  subject: string;
-  doc_type: string;
-  engineering: string;
-  section: string;
-}
-
-// ── Main admin page ───────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
+  const uid = useId();
   const [secret, setSecret] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
 
-  // ── Books ──────────────────────────────────────────────────────────────────
+  // ── Nav ────────────────────────────────────────────────────────────────────
+  type Page = "library" | "exercises" | "theory" | "review";
+  const [page, setPage] = useState<Page>("library");
+
+  // ── Library ────────────────────────────────────────────────────────────────
   const [books, setBooks] = useState<SourceDocument[]>([]);
   const [loadingBooks, setLoadingBooks] = useState(false);
-  const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
+  const [detailBook, setDetailBook] = useState<SourceDocument | null>(null);
 
-  // Create book form
-  const [showCreateBook, setShowCreateBook] = useState(false);
-  const [newBookTitle, setNewBookTitle] = useState("");
-  const [newBookSubject, setNewBookSubject] = useState("analisi1");
-  const [newBookDocType, setNewBookDocType] = useState("libro_teoria");
-  const [newBookEngineering, setNewBookEngineering] = useState("tutti");
-  const [newBookSection, setNewBookSection] = useState("tutti");
+  // Add resource form
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newSubject, setNewSubject] = useState("analisi1");
+  const [newDocType, setNewDocType] = useState("libro_teoria");
+  const [newEngineering, setNewEngineering] = useState("tutti");
+  const [newSection, setNewSection] = useState("tutti");
   const [creatingBook, setCreatingBook] = useState(false);
 
-  // Chapter upload form
-  const [chapterTitle, setChapterTitle] = useState("");
-  const [chapterIndex, setChapterIndex] = useState("");
-  const [totalChapters, setTotalChapters] = useState("");
-  const [chapterFile, setChapterFile] = useState<File | null>(null);
-  const [chapterStatus, setChapterStatus] = useState<Status>("idle");
-  const [chapterMsg, setChapterMsg] = useState("");
+  // Chapter upload (detail view)
+  const [chTitle, setChTitle] = useState("");
+  const [chIndex, setChIndex] = useState("");
+  const [chTotal, setChTotal] = useState("");
+  const [chFile, setChFile] = useState<File | null>(null);
+  const [chStatus, setChStatus] = useState<Status>("idle");
+  const [chMsg, setChMsg] = useState("");
+  const [processed, setProcessed] = useState<ProcessedEntry[]>([]);
 
-  // ── Upload form state (exercises / theory tabs) ─────────────────────────
+  // ── Exercise tab ───────────────────────────────────────────────────────────
   const [exFile, setExFile] = useState<File | null>(null);
   const [exSubject, setExSubject] = useState("analisi1");
   const [exSource, setExSource] = useState("eserciziario");
@@ -283,6 +292,7 @@ export default function AdminPage() {
   const [exStatus, setExStatus] = useState<Status>("idle");
   const [exMsg, setExMsg] = useState("");
 
+  // ── Theory tab ─────────────────────────────────────────────────────────────
   const [thFile, setThFile] = useState<File | null>(null);
   const [thSubject, setThSubject] = useState("analisi1");
   const [thTitle, setThTitle] = useState("");
@@ -291,34 +301,26 @@ export default function AdminPage() {
   const [thStatus, setThStatus] = useState<Status>("idle");
   const [thMsg, setThMsg] = useState("");
 
-  // Review state
+  // ── Review tab ─────────────────────────────────────────────────────────────
   const [reviewSubject, setReviewSubject] = useState("analisi1");
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loadingReview, setLoadingReview] = useState(false);
 
-  // ── Login ──────────────────────────────────────────────────────────────────
+  // ── Auth ───────────────────────────────────────────────────────────────────
   async function handleLogin() {
-    setAuthLoading(true);
-    setAuthError(false);
-    const res = await fetch("/api/admin/books", {
-      headers: { "x-admin-secret": secret },
-    });
+    setAuthLoading(true); setAuthError(false);
+    const res = await fetch("/api/admin/books", { headers: { "x-admin-secret": secret } });
     setAuthLoading(false);
-    if (res.status === 401) {
-      setAuthError(true);
-    } else {
-      const data = await res.json();
-      setBooks(data.books || []);
-      setAuthenticated(true);
-    }
+    if (res.status === 401) { setAuthError(true); return; }
+    const data = await res.json();
+    setBooks(data.books || []);
+    setAuthenticated(true);
   }
 
-  // ── Load books ─────────────────────────────────────────────────────────────
+  // ── Library helpers ────────────────────────────────────────────────────────
   const loadBooks = useCallback(async () => {
     setLoadingBooks(true);
-    const res = await fetch("/api/admin/books", {
-      headers: { "x-admin-secret": secret },
-    });
+    const res = await fetch("/api/admin/books", { headers: { "x-admin-secret": secret } });
     const data = await res.json();
     setBooks(data.books || []);
     setLoadingBooks(false);
@@ -328,461 +330,429 @@ export default function AdminPage() {
     if (authenticated && books.length === 0) loadBooks();
   }, [authenticated, books.length, loadBooks]);
 
-  // ── Create book ────────────────────────────────────────────────────────────
-  async function createBook() {
-    if (!newBookTitle) return;
+  async function createResource() {
+    if (!newTitle) return;
     setCreatingBook(true);
     const res = await fetch("/api/admin/books", {
       method: "POST",
       headers: { "content-type": "application/json", "x-admin-secret": secret },
-      body: JSON.stringify({
-        title: newBookTitle,
-        subject: newBookSubject,
-        doc_type: newBookDocType,
-        engineering: newBookEngineering,
-        section: newBookSection,
-      }),
+      body: JSON.stringify({ title: newTitle, subject: newSubject, doc_type: newDocType, engineering: newEngineering, section: newSection }),
     });
     const data = await res.json();
     setCreatingBook(false);
     if (data.book) {
       setBooks((prev) => [data.book, ...prev]);
-      setSelectedBookId(data.book.id);
-      setShowCreateBook(false);
-      setNewBookTitle("");
+      setNewTitle(""); setShowAddForm(false);
+      openDetail(data.book);
     }
   }
 
-  // ── Upload PDF to Supabase Storage via signed URL ─────────────────────────
+  function openDetail(book: SourceDocument) {
+    setDetailBook(book);
+    setChTitle(""); setChIndex(""); setChTotal(""); setChFile(null);
+    setChStatus("idle"); setChMsg(""); setProcessed([]);
+  }
+
   async function uploadToStorage(file: File, label: string): Promise<string> {
     const urlRes = await fetch("/api/admin/storage-upload-url", {
       method: "POST",
       headers: { "content-type": "application/json", "x-admin-secret": secret },
       body: JSON.stringify({ filename: `${label}.pdf` }),
     });
-    if (!urlRes.ok) {
-      const err = await urlRes.json().catch(() => ({}));
-      throw new Error(`Signed URL error: ${err.error || urlRes.statusText}`);
-    }
+    if (!urlRes.ok) { const e = await urlRes.json().catch(() => ({})); throw new Error(e.error || "Signed URL error"); }
     const { signedUrl, path } = await urlRes.json();
-
-    const uploadRes = await fetch(signedUrl, {
-      method: "PUT",
-      headers: { "content-type": "application/pdf" },
-      body: file,
-    });
-    if (!uploadRes.ok) throw new Error(`Upload fallito: ${uploadRes.status} ${uploadRes.statusText}`);
+    const uploadRes = await fetch(signedUrl, { method: "PUT", headers: { "content-type": "application/pdf" }, body: file });
+    if (!uploadRes.ok) throw new Error(`Upload fallito: ${uploadRes.statusText}`);
     return path;
   }
 
-  // ── Process one chapter ────────────────────────────────────────────────────
-  async function handleChapterUpload() {
-    if (!chapterFile || !chapterTitle || !selectedBookId) return;
-    setChapterStatus("uploading");
-    setChapterMsg("");
+  async function handleProcessChapter() {
+    if (!chFile || !chTitle || !detailBook) return;
+    setChStatus("uploading"); setChMsg("");
     try {
-      const storagePath = await uploadToStorage(chapterFile, chapterTitle);
-      setChapterStatus("processing");
+      const storagePath = await uploadToStorage(chFile, chTitle);
+      setChStatus("processing");
       const res = await fetch("/api/admin/process-chapter", {
         method: "POST",
         headers: { "content-type": "application/json", "x-admin-secret": secret },
         body: JSON.stringify({
-          storagePath,
-          sourceDocumentId: selectedBookId,
-          chapterTitle,
-          chapterIndex: chapterIndex ? parseInt(chapterIndex) : undefined,
-          totalChapters: totalChapters ? parseInt(totalChapters) : undefined,
+          storagePath, sourceDocumentId: detailBook.id, chapterTitle: chTitle,
+          chapterIndex: chIndex ? parseInt(chIndex) : undefined,
+          totalChapters: chTotal ? parseInt(chTotal) : undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Errore");
-      const book = books.find((b) => b.id === selectedBookId);
-      const label = book?.doc_type === "libro_teoria" ? "lezioni" : "esercizi";
-      setChapterMsg(`Estratti ${data.extracted} ${label} da "${chapterTitle}"`);
-      setChapterStatus("done");
-      setChapterTitle("");
-      setChapterFile(null);
-      setChapterIndex("");
+      const label = detailBook.doc_type === "libro_teoria" ? "lezioni" : "esercizi";
+      const msg = `${data.extracted} ${label} estratti`;
+      setProcessed((prev) => [...prev, { chapterTitle: chTitle, extracted: data.extracted, label }]);
+      setChMsg(msg); setChStatus("done");
+      setChTitle(""); setChFile(null); setChIndex("");
     } catch (err) {
-      setChapterMsg(err instanceof Error ? err.message : "Errore");
-      setChapterStatus("error");
+      setChMsg(err instanceof Error ? err.message : "Errore");
+      setChStatus("error");
     }
   }
 
-  // ── Exercise upload ────────────────────────────────────────────────────────
+  // ── Exercises ──────────────────────────────────────────────────────────────
   async function handleExerciseUpload() {
     if (!exFile || !exTitle) return;
-    setExStatus("processing");
-    setExMsg("");
+    setExStatus("processing"); setExMsg("");
     const formData = new FormData();
-    formData.append("file", exFile);
-    formData.append("subject", exSubject);
-    formData.append("source", exSource);
-    formData.append("title", exTitle);
-    formData.append("engineering", exEngineering);
-    formData.append("section", exSection);
+    formData.append("file", exFile); formData.append("subject", exSubject);
+    formData.append("source", exSource); formData.append("title", exTitle);
+    formData.append("engineering", exEngineering); formData.append("section", exSection);
     if (exYear) formData.append("year", exYear);
-
     try {
-      const res = await fetch("/api/admin/process-exercises", {
-        method: "POST",
-        headers: { "x-admin-secret": secret },
-        body: formData,
-      });
+      const res = await fetch("/api/admin/process-exercises", { method: "POST", headers: { "x-admin-secret": secret }, body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setExMsg(`Estratti ${data.extracted} esercizi da "${exTitle}"`);
-      setExStatus("done");
-      setExFile(null); setExTitle(""); setExYear("");
-    } catch (err) {
-      setExMsg(err instanceof Error ? err.message : "Errore");
-      setExStatus("error");
-    }
+      setExStatus("done"); setExFile(null); setExTitle(""); setExYear("");
+    } catch (err) { setExMsg(err instanceof Error ? err.message : "Errore"); setExStatus("error"); }
   }
 
-  // ── Theory upload ──────────────────────────────────────────────────────────
+  // ── Theory ─────────────────────────────────────────────────────────────────
   async function handleTheoryUpload() {
     if (!thFile || !thTitle) return;
-    setThStatus("processing");
-    setThMsg("");
+    setThStatus("processing"); setThMsg("");
     const formData = new FormData();
-    formData.append("file", thFile);
-    formData.append("subject", thSubject);
-    formData.append("title", thTitle);
-    formData.append("engineering", thEngineering);
+    formData.append("file", thFile); formData.append("subject", thSubject);
+    formData.append("title", thTitle); formData.append("engineering", thEngineering);
     formData.append("section", thSection);
-
     try {
-      const res = await fetch("/api/admin/process-theory", {
-        method: "POST",
-        headers: { "x-admin-secret": secret },
-        body: formData,
-      });
+      const res = await fetch("/api/admin/process-theory", { method: "POST", headers: { "x-admin-secret": secret }, body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setThMsg(`Estratte ${data.extracted} lezioni da "${thTitle}"`);
-      setThStatus("done");
-      setThFile(null); setThTitle("");
-    } catch (err) {
-      setThMsg(err instanceof Error ? err.message : "Errore");
-      setThStatus("error");
-    }
+      setThStatus("done"); setThFile(null); setThTitle("");
+    } catch (err) { setThMsg(err instanceof Error ? err.message : "Errore"); setThStatus("error"); }
   }
 
   // ── Review ─────────────────────────────────────────────────────────────────
   async function loadExercises() {
     setLoadingReview(true);
-    const res = await fetch(`/api/admin/exercises?subject=${reviewSubject}`, {
-      headers: { "x-admin-secret": secret },
-    });
+    const res = await fetch(`/api/admin/exercises?subject=${reviewSubject}`, { headers: { "x-admin-secret": secret } });
     const data = await res.json();
-    setExercises(data.exercises || []);
-    setLoadingReview(false);
+    setExercises(data.exercises || []); setLoadingReview(false);
   }
 
-  const selectedBook = books.find((b) => b.id === selectedBookId) ?? null;
-
+  // ── Auth gate ──────────────────────────────────────────────────────────────
   if (!authenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader><CardTitle>Admin Educly</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <Field label="Password admin">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold">Admin Educly</h1>
+            <p className="text-sm text-muted-foreground mt-1">Area riservata</p>
+          </div>
+          <div className="bg-card border rounded-2xl p-6 space-y-4">
+            <Field label="Password">
               <Input
+                id={`${uid}-pw`}
                 type="password"
                 value={secret}
                 onChange={(e) => { setSecret(e.target.value); setAuthError(false); }}
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                placeholder="Password"
-                className={authError ? "border-red-500" : ""}
+                placeholder="••••••••"
+                className={authError ? "border-red-500 focus-visible:ring-red-400" : ""}
               />
               {authError && <p className="text-xs text-red-500 mt-1">Password errata.</p>}
             </Field>
             <Button className="w-full" onClick={handleLogin} disabled={!secret || authLoading}>
-              {authLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Accedi
+              {authLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Accedi
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
+  // ── Main layout ────────────────────────────────────────────────────────────
+  const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
+    { id: "library", label: "Libreria", icon: <Library className="h-4 w-4" /> },
+    { id: "exercises", label: "Esercizi", icon: <PenLine className="h-4 w-4" /> },
+    { id: "theory", label: "Teoria", icon: <BookOpen className="h-4 w-4" /> },
+    { id: "review", label: "Rivedi", icon: <Eye className="h-4 w-4" /> },
+  ];
+
   return (
-    <div className="min-h-screen bg-muted/30 p-6">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Admin — Gestione materiali</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Carica PDF → Claude estrae esercizi e lezioni → rivedi e modifica → gli studenti li usano
-          </p>
+    <div className="min-h-screen bg-muted/30">
+      {/* Top nav */}
+      <div className="border-b bg-card sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-6 flex items-center gap-1 h-14">
+          <span className="font-bold text-sm mr-4">Admin</span>
+          {NAV.map((n) => (
+            <button
+              key={n.id}
+              onClick={() => { setPage(n.id); setDetailBook(null); }}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                page === n.id ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {n.icon}{n.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        <Tabs defaultValue="book">
-          <TabsList className="w-full">
-            <TabsTrigger value="book" className="flex-1 gap-1.5"><Library className="h-4 w-4" />Libro</TabsTrigger>
-            <TabsTrigger value="exercises" className="flex-1 gap-1.5"><PenLine className="h-4 w-4" />Esercizi</TabsTrigger>
-            <TabsTrigger value="theory" className="flex-1 gap-1.5"><BookOpen className="h-4 w-4" />Teoria</TabsTrigger>
-            <TabsTrigger value="review" className="flex-1 gap-1.5"><Eye className="h-4 w-4" />Rivedi</TabsTrigger>
-          </TabsList>
+      <div className="max-w-5xl mx-auto px-6 py-8">
 
-          {/* ── BOOK TAB ── */}
-          <TabsContent value="book" className="space-y-4 mt-4">
+        {/* ── LIBRARY ── */}
+        {page === "library" && !detailBook && (
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-bold">Libreria</h1>
+                <p className="text-sm text-muted-foreground mt-0.5">Libri, eserciziarii e dispense caricate</p>
+              </div>
+              <Button onClick={() => setShowAddForm((v) => !v)} className="gap-1.5">
+                {showAddForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {showAddForm ? "Annulla" : "Aggiungi risorsa"}
+              </Button>
+            </div>
 
-            {/* Step 1: Books list */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">1 — Seleziona o crea un libro</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1"
-                    onClick={() => setShowCreateBook((v) => !v)}
-                  >
-                    {showCreateBook ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                    {showCreateBook ? "Annulla" : "Nuovo libro"}
+            {/* Add resource form */}
+            {showAddForm && (
+              <div className="bg-card border rounded-2xl p-5 space-y-4">
+                <p className="font-semibold text-sm">Nuova risorsa</p>
+                <Field label="Titolo">
+                  <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="es. Bramanti Pagani Salsa — Analisi Matematica 1"
+                    onKeyDown={(e) => e.key === "Enter" && createResource()} />
+                </Field>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <Field label="Materia">
+                    <NativeSelect value={newSubject} onChange={setNewSubject}
+                      options={SUBJECTS.map((s) => ({ id: s.id, name: s.name }))} />
+                  </Field>
+                  <Field label="Tipo">
+                    <NativeSelect value={newDocType} onChange={setNewDocType}
+                      options={[
+                        { id: "libro_teoria", name: "Libro di teoria" },
+                        { id: "eserciziario", name: "Eserciziario" },
+                        { id: "dispensa", name: "Dispensa" },
+                      ]} />
+                  </Field>
+                  <Field label="Ingegneria">
+                    <NativeSelect value={newEngineering} onChange={setNewEngineering}
+                      options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))} />
+                  </Field>
+                  <Field label="Scaglione">
+                    <NativeSelect value={newSection} onChange={setNewSection}
+                      options={SECTIONS.map((s) => ({ id: s, name: s === "tutti" ? "Tutti" : `Scaglione ${s}` }))} />
+                  </Field>
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={createResource} disabled={!newTitle || creatingBook}>
+                    {creatingBook ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Creazione…</> : "Crea risorsa"}
                   </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-
-                {/* Create book inline form */}
-                {showCreateBook && (
-                  <div className="border rounded-xl p-4 space-y-3 bg-muted/20">
-                    <p className="text-sm font-medium">Nuovo libro</p>
-                    <Field label="Titolo">
-                      <Input
-                        value={newBookTitle}
-                        onChange={(e) => setNewBookTitle(e.target.value)}
-                        placeholder="es. Bramanti Pagani Salsa — Analisi Matematica 1"
-                      />
-                    </Field>
-                    <div className="grid grid-cols-2 gap-3">
-                      <Field label="Materia">
-                        <NativeSelect value={newBookSubject} onChange={setNewBookSubject}
-                          options={SUBJECTS.map((s) => ({ id: s.id, name: s.name }))} />
-                      </Field>
-                      <Field label="Tipo">
-                        <NativeSelect value={newBookDocType} onChange={setNewBookDocType}
-                          options={[
-                            { id: "libro_teoria", name: "Libro di teoria" },
-                            { id: "eserciziario", name: "Eserciziario" },
-                          ]} />
-                      </Field>
-                      <Field label="Ingegneria">
-                        <NativeSelect value={newBookEngineering} onChange={setNewBookEngineering}
-                          options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))} />
-                      </Field>
-                      <Field label="Scaglione">
-                        <NativeSelect value={newBookSection} onChange={setNewBookSection}
-                          options={SECTIONS.map((s) => ({ id: s, name: s === "tutti" ? "Tutti" : `Scaglione ${s}` }))} />
-                      </Field>
-                    </div>
-                    <Button onClick={createBook} disabled={!newBookTitle || creatingBook} className="w-full">
-                      {creatingBook ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creazione...</> : "Crea libro"}
-                    </Button>
-                  </div>
-                )}
-
-                {/* Books list */}
-                {loadingBooks ? (
-                  <div className="flex justify-center py-6">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : books.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">
-                    Nessun libro ancora. Creane uno con il pulsante qui sopra.
-                  </p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {books.map((book) => (
-                      <button
-                        key={book.id}
-                        onClick={() => { setSelectedBookId(book.id); setChapterStatus("idle"); setChapterMsg(""); }}
-                        className={cn(
-                          "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors",
-                          selectedBookId === book.id
-                            ? "border-primary bg-primary/5"
-                            : "border-border hover:border-primary/30 hover:bg-muted/30"
-                        )}
-                      >
-                        <Library className={cn("h-4 w-4 shrink-0", selectedBookId === book.id ? "text-primary" : "text-muted-foreground")} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{book.title}</p>
-                          <div className="flex gap-1.5 mt-0.5">
-                            <span className="text-xs text-muted-foreground">{book.subject}</span>
-                            <span className="text-xs text-muted-foreground">·</span>
-                            <span className="text-xs text-muted-foreground">{book.doc_type === "libro_teoria" ? "teoria" : "esercizi"}</span>
-                            {book.engineering !== "tutti" && <>
-                              <span className="text-xs text-muted-foreground">·</span>
-                              <span className="text-xs text-muted-foreground">{book.engineering}</span>
-                            </>}
-                          </div>
-                        </div>
-                        <ChevronRight className={cn("h-4 w-4 shrink-0 transition-opacity", selectedBookId === book.id ? "opacity-100 text-primary" : "opacity-0")} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Step 2: Add chapter */}
-            {selectedBook && (
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">2 — Aggiungi capitolo</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Libro: <span className="font-medium text-foreground">{selectedBook.title}</span>
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <Field label="Titolo capitolo">
-                    <Input
-                      value={chapterTitle}
-                      onChange={(e) => setChapterTitle(e.target.value)}
-                      placeholder="es. Capitolo 3 — Derivate — Parte 1"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Includi &quot;Parte 1&quot;, &quot;Parte 2&quot; nel titolo se il capitolo è diviso in più PDF.
-                    </p>
-                  </Field>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="N° capitolo (opzionale)">
-                      <Input
-                        type="number"
-                        value={chapterIndex}
-                        onChange={(e) => setChapterIndex(e.target.value)}
-                        placeholder="es. 3"
-                      />
-                    </Field>
-                    <Field label="Totale capitoli (opzionale)">
-                      <Input
-                        type="number"
-                        value={totalChapters}
-                        onChange={(e) => setTotalChapters(e.target.value)}
-                        placeholder="es. 12"
-                      />
-                    </Field>
-                  </div>
-
-                  <FileUploadZone file={chapterFile} onChange={setChapterFile} />
-
-                  <StatusBanner status={chapterStatus} message={chapterMsg} />
-
-                  <Button
-                    className="w-full"
-                    onClick={handleChapterUpload}
-                    disabled={!chapterFile || !chapterTitle || chapterStatus === "uploading" || chapterStatus === "processing"}
-                  >
-                    {chapterStatus === "uploading" || chapterStatus === "processing"
-                      ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        {chapterStatus === "uploading" ? "Caricamento..." : "Claude sta leggendo..."}
-                        </>
-                      : <><Upload className="h-4 w-4 mr-2" />Carica e processa capitolo</>}
-                  </Button>
-                </CardContent>
-              </Card>
+              </div>
             )}
-          </TabsContent>
 
-          {/* ── EXERCISES UPLOAD ── */}
-          <TabsContent value="exercises" className="space-y-4 mt-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Carica eserciziario o tema d&apos;esame</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <FileUploadZone file={exFile} onChange={setExFile} />
+            {/* Grid */}
+            {loadingBooks ? (
+              <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            ) : books.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <Library className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="font-medium text-sm">Nessuna risorsa ancora</p>
+                <p className="text-xs text-muted-foreground mt-1">Clicca &quot;Aggiungi risorsa&quot; per iniziare</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {books.map((b) => (
+                  <ResourceCard key={b.id} resource={b} onClick={() => openDetail(b)} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Materia">
-                    <NativeSelect value={exSubject} onChange={setExSubject}
-                      options={SUBJECTS.map((s) => ({ id: s.id, name: s.name }))} />
-                  </Field>
-                  <Field label="Tipo documento">
-                    <NativeSelect value={exSource} onChange={setExSource}
-                      options={EXERCISE_SOURCES.map((s) => ({ id: s.id, name: s.name }))} />
-                  </Field>
-                  <Field label="Corso di ingegneria">
-                    <NativeSelect value={exEngineering} onChange={setExEngineering}
-                      options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))} />
-                  </Field>
-                  <Field label="Scaglione">
-                    <NativeSelect value={exSection} onChange={setExSection}
-                      options={SECTIONS.map((s) => ({ id: s, name: s === "tutti" ? "Tutti gli scaglioni" : `Scaglione ${s}` }))} />
-                  </Field>
-                </div>
+        {/* ── LIBRARY DETAIL ── */}
+        {page === "library" && detailBook && (
+          <div className="space-y-6 max-w-2xl">
+            {/* Back + title */}
+            <div>
+              <button
+                onClick={() => setDetailBook(null)}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+              >
+                <ArrowLeft className="h-4 w-4" />Libreria
+              </button>
+              <h1 className="text-xl font-bold leading-snug">{detailBook.title}</h1>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <Badge variant="secondary">{detailBook.subject}</Badge>
+                <Badge variant="outline">{DOC_TYPE_LABELS[detailBook.doc_type] ?? detailBook.doc_type}</Badge>
+                {detailBook.engineering !== "tutti" && <Badge variant="outline">{detailBook.engineering}</Badge>}
+                {detailBook.section !== "tutti" && <Badge variant="outline">Scaglione {detailBook.section}</Badge>}
+              </div>
+            </div>
 
-                <Field label="Titolo documento">
-                  <Input value={exTitle} onChange={(e) => setExTitle(e.target.value)}
-                    placeholder="es. Bramanti — Capitolo Integrali" />
+            <Separator />
+
+            {/* Chapter upload form */}
+            <div className="bg-card border rounded-2xl p-5 space-y-4">
+              <p className="font-semibold text-sm">Aggiungi capitolo</p>
+
+              <Field
+                label="Titolo capitolo"
+                hint={'Includi "Parte 1", "Parte 2" nel titolo se il capitolo è diviso in più PDF.'}
+              >
+                <Input
+                  value={chTitle}
+                  onChange={(e) => setChTitle(e.target.value)}
+                  placeholder="es. Capitolo 3 — Derivate — Parte 1"
+                />
+              </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="N° capitolo (opzionale)">
+                  <Input type="number" value={chIndex} onChange={(e) => setChIndex(e.target.value)} placeholder="es. 3" />
                 </Field>
+                <Field label="Totale capitoli (opzionale)">
+                  <Input type="number" value={chTotal} onChange={(e) => setChTotal(e.target.value)} placeholder="es. 12" />
+                </Field>
+              </div>
 
-                {exSource === "tema_passato" && (
-                  <Field label="Anno esame">
-                    <Input type="number" value={exYear} onChange={(e) => setExYear(e.target.value)} placeholder="es. 2024" />
-                  </Field>
+              <FilePickerRow
+                file={chFile}
+                onChange={setChFile}
+                disabled={chStatus === "uploading" || chStatus === "processing"}
+              />
+
+              <StatusBanner status={chStatus} message={chMsg} />
+
+              <Button
+                className="w-full"
+                onClick={handleProcessChapter}
+                disabled={!chFile || !chTitle || chStatus === "uploading" || chStatus === "processing"}
+              >
+                {chStatus === "uploading" || chStatus === "processing" ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {chStatus === "uploading" ? "Caricamento…" : "Claude sta leggendo…"}
+                  </>
+                ) : (
+                  <><Upload className="h-4 w-4 mr-2" />Processa capitolo</>
                 )}
+              </Button>
+            </div>
 
-                <StatusBanner status={exStatus} message={exMsg} />
-
-                <Button className="w-full" onClick={handleExerciseUpload}
-                  disabled={!exFile || !exTitle || exStatus === "processing"}>
-                  {exStatus === "processing"
-                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Elaborazione...</>
-                    : <><Upload className="h-4 w-4 mr-2" />Carica e processa</>}
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* ── THEORY UPLOAD ── */}
-          <TabsContent value="theory" className="space-y-4 mt-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Carica libro di teoria o dispensa</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <FileUploadZone file={thFile} onChange={setThFile} />
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Materia">
-                    <NativeSelect value={thSubject} onChange={setThSubject}
-                      options={SUBJECTS.map((s) => ({ id: s.id, name: s.name }))} />
-                  </Field>
-                  <Field label="Corso di ingegneria">
-                    <NativeSelect value={thEngineering} onChange={setThEngineering}
-                      options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))} />
-                  </Field>
-                  <Field label="Scaglione">
-                    <NativeSelect value={thSection} onChange={setThSection}
-                      options={SECTIONS.map((s) => ({ id: s, name: s === "tutti" ? "Tutti gli scaglioni" : `Scaglione ${s}` }))} />
-                  </Field>
+            {/* Processed log */}
+            {processed.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Processati questa sessione
+                </p>
+                <div className="space-y-1.5">
+                  {processed.map((entry, i) => (
+                    <div key={i} className="flex items-center gap-2.5 px-3 py-2 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-xl text-sm">
+                      <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                      <span className="flex-1 font-medium truncate">{entry.chapterTitle}</span>
+                      <span className="text-green-700 dark:text-green-400 shrink-0 text-xs">{entry.extracted} {entry.label}</span>
+                    </div>
+                  ))}
                 </div>
+              </div>
+            )}
+          </div>
+        )}
 
-                <Field label="Titolo documento">
-                  <Input value={thTitle} onChange={(e) => setThTitle(e.target.value)}
-                    placeholder="es. Bramanti Pagani Salsa — Analisi Matematica 1" />
+        {/* ── EXERCISES ── */}
+        {page === "exercises" && (
+          <div className="max-w-2xl space-y-6">
+            <div>
+              <h1 className="text-xl font-bold">Esercizi standalone</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">Eserciziarii o temi d&apos;esame non legati a un libro</p>
+            </div>
+            <div className="bg-card border rounded-2xl p-5 space-y-4">
+              <FilePickerRow file={exFile} onChange={setExFile} />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Materia">
+                  <NativeSelect value={exSubject} onChange={setExSubject}
+                    options={SUBJECTS.map((s) => ({ id: s.id, name: s.name }))} />
                 </Field>
+                <Field label="Tipo documento">
+                  <NativeSelect value={exSource} onChange={setExSource}
+                    options={EXERCISE_SOURCES.map((s) => ({ id: s.id, name: s.name }))} />
+                </Field>
+                <Field label="Ingegneria">
+                  <NativeSelect value={exEngineering} onChange={setExEngineering}
+                    options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))} />
+                </Field>
+                <Field label="Scaglione">
+                  <NativeSelect value={exSection} onChange={setExSection}
+                    options={SECTIONS.map((s) => ({ id: s, name: s === "tutti" ? "Tutti" : `Scaglione ${s}` }))} />
+                </Field>
+              </div>
+              <Field label="Titolo documento">
+                <Input value={exTitle} onChange={(e) => setExTitle(e.target.value)}
+                  placeholder="es. Bramanti — Capitolo Integrali" />
+              </Field>
+              {exSource === "tema_passato" && (
+                <Field label="Anno esame">
+                  <Input type="number" value={exYear} onChange={(e) => setExYear(e.target.value)} placeholder="es. 2024" />
+                </Field>
+              )}
+              <StatusBanner status={exStatus} message={exMsg} />
+              <Button className="w-full" onClick={handleExerciseUpload}
+                disabled={!exFile || !exTitle || exStatus === "processing"}>
+                {exStatus === "processing"
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Elaborazione…</>
+                  : <><Upload className="h-4 w-4 mr-2" />Carica e processa</>}
+              </Button>
+            </div>
+          </div>
+        )}
 
-                <StatusBanner status={thStatus} message={thMsg} />
+        {/* ── THEORY ── */}
+        {page === "theory" && (
+          <div className="max-w-2xl space-y-6">
+            <div>
+              <h1 className="text-xl font-bold">Teoria standalone</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">Dispense o capitoli non legati a un libro</p>
+            </div>
+            <div className="bg-card border rounded-2xl p-5 space-y-4">
+              <FilePickerRow file={thFile} onChange={setThFile} />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Materia">
+                  <NativeSelect value={thSubject} onChange={setThSubject}
+                    options={SUBJECTS.map((s) => ({ id: s.id, name: s.name }))} />
+                </Field>
+                <Field label="Ingegneria">
+                  <NativeSelect value={thEngineering} onChange={setThEngineering}
+                    options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))} />
+                </Field>
+                <Field label="Scaglione">
+                  <NativeSelect value={thSection} onChange={setThSection}
+                    options={SECTIONS.map((s) => ({ id: s, name: s === "tutti" ? "Tutti" : `Scaglione ${s}` }))} />
+                </Field>
+              </div>
+              <Field label="Titolo documento">
+                <Input value={thTitle} onChange={(e) => setThTitle(e.target.value)}
+                  placeholder="es. Bramanti Pagani Salsa — Capitolo 3" />
+              </Field>
+              <StatusBanner status={thStatus} message={thMsg} />
+              <Button className="w-full" onClick={handleTheoryUpload}
+                disabled={!thFile || !thTitle || thStatus === "processing"}>
+                {thStatus === "processing"
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Elaborazione…</>
+                  : <><Upload className="h-4 w-4 mr-2" />Carica e processa</>}
+              </Button>
+            </div>
+          </div>
+        )}
 
-                <Button className="w-full" onClick={handleTheoryUpload}
-                  disabled={!thFile || !thTitle || thStatus === "processing"}>
-                  {thStatus === "processing"
-                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Elaborazione...</>
-                    : <><Upload className="h-4 w-4 mr-2" />Carica e processa</>}
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* ── REVIEW & EDIT ── */}
-          <TabsContent value="review" className="space-y-4 mt-4">
+        {/* ── REVIEW ── */}
+        {page === "review" && (
+          <div className="max-w-2xl space-y-6">
+            <div>
+              <h1 className="text-xl font-bold">Rivedi esercizi</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">Controlla e modifica gli esercizi estratti</p>
+            </div>
             <div className="flex gap-3 items-end">
               <div className="flex-1">
                 <Field label="Materia">
@@ -791,31 +761,26 @@ export default function AdminPage() {
                 </Field>
               </div>
               <Button onClick={loadExercises} disabled={loadingReview}>
-                {loadingReview ? <Loader2 className="h-4 w-4 animate-spin" /> : "Carica esercizi"}
+                {loadingReview ? <Loader2 className="h-4 w-4 animate-spin" /> : "Carica"}
               </Button>
             </div>
-
-            {exercises.length > 0 && (
+            {exercises.length > 0 ? (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">{exercises.length} esercizi trovati</p>
+                <p className="text-sm text-muted-foreground">{exercises.length} esercizi</p>
                 {exercises.map((ex) => (
-                  <ExerciseCard
-                    key={ex.id}
-                    ex={ex}
-                    secret={secret}
-                    onDelete={(id) => setExercises((prev) => prev.filter((e) => e.id !== id))}
-                  />
+                  <ExerciseCard key={ex.id} ex={ex} secret={secret}
+                    onDelete={(id) => setExercises((prev) => prev.filter((e) => e.id !== id))} />
                 ))}
               </div>
+            ) : (
+              !loadingReview && (
+                <p className="text-sm text-muted-foreground text-center py-12">
+                  Nessun esercizio caricato per questa materia.
+                </p>
+              )
             )}
-
-            {!loadingReview && exercises.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Nessun esercizio caricato per questa materia.
-              </p>
-            )}
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
       </div>
     </div>
   );
