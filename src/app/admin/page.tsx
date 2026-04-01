@@ -271,6 +271,7 @@ export default function AdminPage() {
   const [newEngineering, setNewEngineering] = useState("tutti");
   const [newSection, setNewSection] = useState("tutti");
   const [creatingBook, setCreatingBook] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   // Chapter upload (detail view)
   const [chTitle, setChTitle] = useState("");
@@ -320,10 +321,16 @@ export default function AdminPage() {
   // ── Library helpers ────────────────────────────────────────────────────────
   const loadBooks = useCallback(async () => {
     setLoadingBooks(true);
-    const res = await fetch("/api/admin/books", { headers: { "x-admin-secret": secret } });
-    const data = await res.json();
-    setBooks(data.books || []);
-    setLoadingBooks(false);
+    try {
+      const res = await fetch("/api/admin/books", { headers: { "x-admin-secret": secret } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setBooks(data.books || []);
+    } catch (err) {
+      console.error("loadBooks error:", err);
+    } finally {
+      setLoadingBooks(false);
+    }
   }, [secret]);
 
   useEffect(() => {
@@ -333,17 +340,24 @@ export default function AdminPage() {
   async function createResource() {
     if (!newTitle) return;
     setCreatingBook(true);
-    const res = await fetch("/api/admin/books", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-admin-secret": secret },
-      body: JSON.stringify({ title: newTitle, subject: newSubject, doc_type: newDocType, engineering: newEngineering, section: newSection }),
-    });
-    const data = await res.json();
-    setCreatingBook(false);
-    if (data.book) {
-      setBooks((prev) => [data.book, ...prev]);
-      setNewTitle(""); setShowAddForm(false);
-      openDetail(data.book);
+    setCreateError("");
+    try {
+      const res = await fetch("/api/admin/books", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-admin-secret": secret },
+        body: JSON.stringify({ title: newTitle, subject: newSubject, doc_type: newDocType, engineering: newEngineering, section: newSection }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      if (data.book) {
+        setBooks((prev) => [data.book, ...prev]);
+        setNewTitle(""); setShowAddForm(false); setCreateError("");
+        openDetail(data.book);
+      }
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Errore sconosciuto");
+    } finally {
+      setCreatingBook(false);
     }
   }
 
@@ -545,6 +559,12 @@ export default function AdminPage() {
                       options={SECTIONS.map((s) => ({ id: s, name: s === "tutti" ? "Tutti" : `Scaglione ${s}` }))} />
                   </Field>
                 </div>
+                {createError && (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {createError}
+                  </div>
+                )}
                 <div className="flex justify-end">
                   <Button onClick={createResource} disabled={!newTitle || creatingBook}>
                     {creatingBook ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Creazione…</> : "Crea risorsa"}
