@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 import { extractExercisesFromPdf, extractTheoryFromPdf } from "@/lib/ingestion";
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET!;
@@ -28,11 +28,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
-  const adminSupabase = createAdminClient();
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   // Download PDF from Supabase Storage
-  const { data: fileData, error: downloadError } = await adminSupabase.storage
+  const { data: fileData, error: downloadError } = await supabase.storage
     .from("tmp-pdfs")
     .download(storagePath);
 
@@ -45,7 +44,7 @@ export async function POST(request: NextRequest) {
   const base64 = Buffer.from(arrayBuffer).toString("base64");
 
   // Clean up from storage immediately (fire and forget — don't block processing)
-  adminSupabase.storage.from("tmp-pdfs").remove([storagePath]).catch(() => {});
+  supabase.storage.from("tmp-pdfs").remove([storagePath]).catch(() => {});
 
   let sourceDocumentId: string | null = incomingSourceDocId;
 
