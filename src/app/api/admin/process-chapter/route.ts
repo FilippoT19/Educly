@@ -9,27 +9,44 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const formData = await request.formData();
-  const file = formData.get("file") as File | null;
-  const bookTitle = formData.get("bookTitle") as string;
-  const chapterTitle = formData.get("chapterTitle") as string;
-  const subject = formData.get("subject") as string;
-  const docType = formData.get("docType") as string;
-  const engineering = (formData.get("engineering") as string) || "tutti";
-  const section = (formData.get("section") as string) || "tutti";
-  const chapterIndex = parseInt(formData.get("chapterIndex") as string);
-  const totalChapters = parseInt(formData.get("totalChapters") as string);
-  const lessonOrderStart = parseInt((formData.get("lessonOrderStart") as string) || "1");
-  // sourceDocumentId is passed for chapters 2..N so they link to the same parent
-  let sourceDocumentId = formData.get("sourceDocumentId") as string | null;
+  const body = await request.json();
+  const {
+    storagePath,
+    bookTitle,
+    chapterTitle,
+    subject,
+    docType,
+    engineering = "tutti",
+    section = "tutti",
+    chapterIndex,
+    totalChapters,
+    lessonOrderStart = 1,
+    sourceDocumentId: incomingSourceDocId = null,
+  } = body;
 
-  if (!file || !bookTitle || !chapterTitle || !subject || !docType) {
+  if (!storagePath || !bookTitle || !chapterTitle || !subject || !docType) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
-  const arrayBuffer = await file.arrayBuffer();
-  const base64 = Buffer.from(arrayBuffer).toString("base64");
   const supabase = await createClient();
+
+  // Download PDF from Supabase Storage
+  const { data: fileData, error: downloadError } = await supabase.storage
+    .from("tmp-pdfs")
+    .download(storagePath);
+
+  if (downloadError || !fileData) {
+    return NextResponse.json({ error: `Storage download failed: ${downloadError?.message}` }, { status: 500 });
+  }
+
+  // Convert to base64
+  const arrayBuffer = await fileData.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+
+  // Clean up from storage immediately (fire and forget — don't block processing)
+  supabase.storage.from("tmp-pdfs").remove([storagePath]).catch(() => {});
+
+  let sourceDocumentId: string | null = incomingSourceDocId;
 
   // Create source document only on the first chapter
   if (!sourceDocumentId) {
@@ -47,10 +64,7 @@ export async function POST(request: NextRequest) {
   try {
     if (docType === "libro_teoria") {
       const lessons = await extractTheoryFromPdf(base64, subject, {
-        bookTitle,
-        chapterTitle,
-        chapterIndex,
-        totalChapters,
+        bookTitle, chapterTitle, chapterIndex, totalChapters,
       });
 
       if (lessons.length > 0) {
@@ -73,10 +87,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ sourceDocumentId, extracted: lessons.length });
     } else {
       const exercises = await extractExercisesFromPdf(base64, subject, docType, {
-        bookTitle,
-        chapterTitle,
-        chapterIndex,
-        totalChapters,
+        bookTitle, chapterTitle, chapterIndex, totalChapters,
       });
 
       if (exercises.length > 0) {

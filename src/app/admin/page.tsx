@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { PDFDocument } from "pdf-lib";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -278,32 +279,86 @@ export default function AdminPage() {
     setChapters((prev) => prev.map((ch, idx) => idx === i ? { ...ch, ...patch } : ch));
   }
 
+  // Upload a File to Supabase Storage tmp-pdfs bucket, return the storage path
+  async function uploadToStorage(file: File, label: string): Promise<string> {
+    const supabase = createClient();
+    const path = `admin/${Date.now()}-${label.replace(/[^a-z0-9]/gi, "_")}.pdf`;
+    const { error } = await supabase.storage.from("tmp-pdfs").upload(path, file, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+    if (error) throw new Error(`Upload storage fallito: ${error.message}`);
+    return path;
+  }
+
+  // Process one chapter via API (JSON body with storagePath)
+  async function processChapter({
+    storagePath,
+    chapterTitle,
+    chapterIndex,
+    totalChapters,
+    sourceDocumentId,
+    lessonOrderStart,
+  }: {
+    storagePath: string;
+    chapterTitle: string;
+    chapterIndex: number;
+    totalChapters: number;
+    sourceDocumentId: string | null;
+    lessonOrderStart: number;
+  }) {
+    const res = await fetch("/api/admin/process-chapter", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-secret": secret },
+      body: JSON.stringify({
+        storagePath,
+        bookTitle,
+        chapterTitle,
+        subject: bookSubject,
+        docType: bookDocType,
+        engineering: bookEngineering,
+        section: bookSection,
+        chapterIndex,
+        totalChapters,
+        lessonOrderStart,
+        sourceDocumentId,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Errore capitolo ${chapterIndex}`);
+    return data as { sourceDocumentId: string; extracted: number; error?: string };
+  }
+
   async function handleBookUpload() {
     const validChapters = chapters.filter((ch) => ch.title && ch.file);
     if (!bookTitle || validChapters.length === 0) return;
     setBookStatus("processing");
     setBookMsg("");
-    const formData = new FormData();
-    formData.append("bookTitle", bookTitle);
-    formData.append("subject", bookSubject);
-    formData.append("docType", bookDocType);
-    formData.append("engineering", bookEngineering);
-    formData.append("section", bookSection);
-    formData.append("chapterCount", String(validChapters.length));
-    validChapters.forEach((ch, i) => {
-      formData.append(`chapter_title_${i}`, ch.title);
-      formData.append(`chapter_file_${i}`, ch.file!);
-    });
+
+    let sourceDocumentId: string | null = null;
+    let totalExtracted = 0;
+    let lessonOrderStart = 1;
+
     try {
-      const res = await fetch("/api/admin/process-book", {
-        method: "POST",
-        headers: { "x-admin-secret": secret },
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      for (let i = 0; i < validChapters.length; i++) {
+        const ch = validChapters[i];
+        setBookMsg(`Caricamento capitolo ${i + 1} di ${validChapters.length}: "${ch.title}"…`);
+        const storagePath = await uploadToStorage(ch.file!, ch.title);
+        setBookMsg(`Elaborazione capitolo ${i + 1} di ${validChapters.length}: "${ch.title}"…`);
+        const result = await processChapter({
+          storagePath,
+          chapterTitle: ch.title,
+          chapterIndex: i + 1,
+          totalChapters: validChapters.length,
+          sourceDocumentId,
+          lessonOrderStart,
+        });
+        sourceDocumentId = result.sourceDocumentId;
+        totalExtracted += result.extracted;
+        lessonOrderStart += result.extracted;
+      }
       const label = bookDocType === "libro_teoria" ? "lezioni" : "esercizi";
-      setBookMsg(`Libro processato: ${data.totalExtracted} ${label} estratti da ${validChapters.length} capitoli.`);
+      setBookMsg(`Libro processato: ${totalExtracted} ${label} estratti da ${validChapters.length} capitoli.`);
       setBookStatus("done");
     } catch (err) {
       setBookMsg(err instanceof Error ? err.message : "Errore");
@@ -370,10 +425,9 @@ export default function AdminPage() {
   async function handleAutoBookProcess() {
     if (!autoFile || autoChapters.length === 0 || !bookTitle) return;
     setBookStatus("processing");
-    setBookMsg("Suddivisione capitoli nel browser...");
+    setBookMsg("Suddivisione capitoli nel browser…");
     setAutoProgress(null);
     try {
-      // Load full PDF (use cached if available)
       let fullPdf = fullPdfRef.current;
       if (!fullPdf) {
         const arrayBuffer = await autoFile.arrayBuffer();
@@ -386,49 +440,40 @@ export default function AdminPage() {
       let totalExtracted = 0;
       let lessonOrderStart = 1;
 
-      // Process each chapter individually (one request per chapter to stay within size limits)
       for (let i = 0; i < autoChapters.length; i++) {
-        setAutoProgress({ current: i + 1, total: autoChapters.length });
-        setBookMsg(`Elaborazione capitolo ${i + 1} di ${autoChapters.length}: "${autoChapters[i].title}"...`);
-
         const chapter = autoChapters[i];
+        setAutoProgress({ current: i + 1, total: autoChapters.length });
+        setBookMsg(`Caricamento capitolo ${i + 1} di ${autoChapters.length}: "${chapter.title}"…`);
+
+        // Slice chapter pages
         const startPage = Math.max(0, Math.min(chapter.pdf_page_index, totalPages - 1));
         const endPage = i < autoChapters.length - 1
           ? Math.max(startPage, Math.min(autoChapters[i + 1].pdf_page_index - 1, totalPages - 1))
           : totalPages - 1;
 
-        // Extract chapter pages as a standalone PDF
         const chapterPdf = await PDFDocument.create();
         const pageIndices = Array.from({ length: endPage - startPage + 1 }, (_, k) => startPage + k);
         const copiedPages = await chapterPdf.copyPages(fullPdf, pageIndices);
         copiedPages.forEach((p) => chapterPdf.addPage(p));
         const chapterBytes = await chapterPdf.save();
         const chapterBlob = new Blob([chapterBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+        const chapterFile = new File([chapterBlob], `${chapter.title}.pdf`, { type: "application/pdf" });
 
-        const formData = new FormData();
-        formData.append("file", chapterBlob, `${chapter.title}.pdf`);
-        formData.append("bookTitle", bookTitle);
-        formData.append("chapterTitle", chapter.title);
-        formData.append("subject", bookSubject);
-        formData.append("docType", bookDocType);
-        formData.append("engineering", bookEngineering);
-        formData.append("section", bookSection);
-        formData.append("chapterIndex", String(i + 1));
-        formData.append("totalChapters", String(autoChapters.length));
-        formData.append("lessonOrderStart", String(lessonOrderStart));
-        if (sourceDocumentId) formData.append("sourceDocumentId", sourceDocumentId);
+        // Upload to Storage
+        const storagePath = await uploadToStorage(chapterFile, chapter.title);
+        setBookMsg(`Elaborazione capitolo ${i + 1} di ${autoChapters.length}: "${chapter.title}"…`);
 
-        const res = await fetch("/api/admin/process-chapter", {
-          method: "POST",
-          headers: { "x-admin-secret": secret },
-          body: formData,
+        const result = await processChapter({
+          storagePath,
+          chapterTitle: chapter.title,
+          chapterIndex: i + 1,
+          totalChapters: autoChapters.length,
+          sourceDocumentId,
+          lessonOrderStart,
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `Errore capitolo ${i + 1}`);
-
-        sourceDocumentId = data.sourceDocumentId;
-        totalExtracted += data.extracted;
-        lessonOrderStart += data.extracted;
+        sourceDocumentId = result.sourceDocumentId;
+        totalExtracted += result.extracted;
+        lessonOrderStart += result.extracted;
       }
 
       const label = bookDocType === "libro_teoria" ? "lezioni" : "esercizi";
