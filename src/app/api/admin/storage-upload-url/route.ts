@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/server";
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET!;
 
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
   const { filename } = await request.json();
   const path = `admin/${Date.now()}-${String(filename).replace(/[^a-z0-9.]/gi, "_")}`;
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase.storage
     .from("tmp-pdfs")
     .createSignedUploadUrl(path);
