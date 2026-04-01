@@ -51,6 +51,20 @@ export interface TheoryOptions {
   totalChapters?: number;
 }
 
+/**
+ * Detects whether a chapter title indicates it is one part of a multi-part chapter.
+ * e.g. "Capitolo 3 — Parte 2 di 3" or "Cap. 5 Parte 1"
+ * Returns { isPartial: true, partLabel: "Parte 2 di 3" } or { isPartial: false }.
+ */
+function parseChapterPart(title: string): { isPartial: boolean; partLabel: string } {
+  const match = title.match(/parte\s*(\d+)(?:\s*(?:di|\/)\s*(\d+))?/i);
+  if (!match) return { isPartial: false, partLabel: "" };
+  const partNum = match[1];
+  const totalParts = match[2];
+  const partLabel = totalParts ? `Parte ${partNum} di ${totalParts}` : `Parte ${partNum}`;
+  return { isPartial: true, partLabel };
+}
+
 export async function extractExercisesFromPdf(
   pdfBase64: string,
   subject: string,
@@ -61,50 +75,51 @@ export async function extractExercisesFromPdf(
   const subjectName = subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2";
   const { bookTitle, chapterTitle, chapterIndex, totalChapters } = options;
 
-  const bookContext = bookTitle
-    ? `\nContesto: questo PDF fa parte del libro "${bookTitle}"${chapterTitle ? `, capitolo ${chapterIndex}/${totalChapters}: "${chapterTitle}"` : ""}. Tieni presente questo contesto per classificare correttamente gli esercizi nei topic giusti.\n`
-    : "";
+  const { isPartial, partLabel } = chapterTitle ? parseChapterPart(chapterTitle) : { isPartial: false, partLabel: "" };
 
-  const prompt = `Sei un esperto di ${subjectName} al Politecnico italiano.
-${bookContext}
-Analizza questo documento (eserciziario o tema d'esame) ed estrai TUTTI gli esercizi che trovi.
+  let contextBlock = "";
+  if (bookTitle && chapterTitle) {
+    contextBlock = `
+CONTESTO:
+- Libro: "${bookTitle}"
+- Capitolo ${chapterIndex} di ${totalChapters}: "${chapterTitle}"${isPartial ? `\n- Nota: questo PDF è solo la ${partLabel} del capitolo. Estrai tutti gli esercizi presenti in questa parte; verranno uniti con le altre parti dello stesso capitolo.` : ""}
+`;
+  }
+
+  const prompt = `Sei un esperto di ${subjectName} al Politecnico italiano. Il documento è un PDF che può essere scannerizzato e può contenere testo, formule matematiche stampate o scritte a mano, e grafici. Sii preciso nell'interpretare il contenuto visivo.
+${contextBlock}
+Estrai TUTTI gli esercizi che trovi in questo documento.
 
 Per ogni esercizio restituisci:
 - topic_id: uno tra ${topicIds.join(", ")}
 - difficulty: 1 (facile), 2 (medio), 3 (difficile)
-- question_latex: testo completo dell'esercizio in LaTeX (usa $...$ inline e $$...$$ display)
-- solution_latex: soluzione completa passo-passo in LaTeX
-- hints: array di 2-3 suggerimenti
-- tags: array di sottotemi specifici (es. ["integrazione_per_parti", "cambio_variabile"])
+- question_latex: testo completo dell'esercizio in LaTeX. Usa $...$ per formule inline e $$...$$ per display. Trascrivi fedelmente tutte le formule matematiche che vedi, anche se il documento è scannerizzato.
+- solution_latex: soluzione completa passo-passo in LaTeX. Se la soluzione non è nel documento, costruiscila tu in modo corretto e dettagliato.
+- hints: array di 2-3 suggerimenti strategici (non la soluzione completa)
+- tags: array di sottotemi specifici es. ["integrazione_per_parti", "cambio_variabile"]
 
-Rispondi SOLO con un array JSON valido:
+Rispondi SOLO con un array JSON valido, nessun testo prima o dopo:
 [
   {
     "topic_id": "...",
-    "difficulty": 1,
+    "difficulty": 2,
     "question_latex": "...",
     "solution_latex": "...",
     "hints": ["...", "..."],
     "tags": ["...", "..."]
   }
-]
-
-Estrai tutti gli esercizi che riesci a trovare nel documento. Se la soluzione non è nel documento, costruiscila tu in modo completo e corretto.`;
+]`;
 
   const response = await anthropic.messages.create({
     model: "claude-opus-4-6",
-    max_tokens: 8192,
+    max_tokens: 16000,
     messages: [
       {
         role: "user",
         content: [
           {
             type: "document",
-            source: {
-              type: "base64",
-              media_type: "application/pdf",
-              data: pdfBase64,
-            },
+            source: { type: "base64", media_type: "application/pdf", data: pdfBase64 },
           },
           { type: "text", text: prompt },
         ],
@@ -115,7 +130,6 @@ Estrai tutti gli esercizi che riesci a trovare nel documento. Se la soluzione no
   const text = response.content[0].type === "text" ? response.content[0].text : "";
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error("No JSON array found in response");
-
   return JSON.parse(jsonMatch[0]) as ExtractedExercise[];
 }
 
@@ -128,24 +142,33 @@ export async function extractTheoryFromPdf(
   const subjectName = subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2";
   const { bookTitle, chapterTitle, chapterIndex, totalChapters } = options;
 
-  const bookContext = bookTitle
-    ? `\nContesto: questo PDF fa parte del libro "${bookTitle}"${chapterTitle ? `, capitolo ${chapterIndex}/${totalChapters}: "${chapterTitle}"` : ""}. È importante che le lezioni estratte riflettano i contenuti specifici di questo capitolo e siano coerenti con il resto del libro.\n`
-    : "";
+  const { isPartial, partLabel } = chapterTitle ? parseChapterPart(chapterTitle) : { isPartial: false, partLabel: "" };
 
-  const prompt = `Sei un esperto di ${subjectName} al Politecnico italiano.
-${bookContext}
-Analizza questo libro/dispensa e crea lezioni di teoria strutturate.
+  let contextBlock = "";
+  if (bookTitle && chapterTitle) {
+    contextBlock = `
+CONTESTO:
+- Libro: "${bookTitle}"
+- Capitolo ${chapterIndex} di ${totalChapters}: "${chapterTitle}"${isPartial
+  ? `\n- Nota: questo PDF è solo la ${partLabel} del capitolo. Estrai solo il contenuto presente in queste pagine — non inventare il contenuto delle altre parti. Le lezioni di questa parte verranno aggiunte in sequenza dopo quelle delle parti precedenti.`
+  : ""}
+`;
+  }
 
-Per ogni capitolo/argomento principale crea UNA lezione con:
+  const prompt = `Sei un esperto di ${subjectName} al Politecnico italiano. Il documento è un PDF che può essere scannerizzato e può contenere testo, formule matematiche (stampate o scritte a mano), teoremi, dimostrazioni e grafici. Sii preciso nell'interpretare il contenuto visivo e trascrivi fedelmente tutto il materiale matematico.
+${contextBlock}
+Analizza questo materiale e crea lezioni di teoria strutturate.
+
+Per ogni sezione/argomento distinto crea UNA lezione con:
 - topic_id: uno tra ${topicIds.join(", ")}
-- lesson_order: numero progressivo (1, 2, 3...)
-- title: titolo della lezione
-- content_markdown: contenuto completo in Markdown con formule LaTeX ($...$ inline, $$...$$ display). Deve essere chiaro, completo e didattico. Includi definizioni, teoremi, esempi e osservazioni importanti.
-- key_concepts: array di 3-6 concetti chiave della lezione
-- mini_quiz: array di 3 domande a scelta multipla per verificare la comprensione:
+- lesson_order: numero progressivo a partire da 1 (all'interno di questo PDF)
+- title: titolo chiaro e descrittivo della lezione
+- content_markdown: contenuto completo in Markdown con formule LaTeX ($...$ inline, $$...$$ display). Deve essere didattico, includere definizioni, enunciati di teoremi, eventuali dimostrazioni importanti, esempi numerici e osservazioni. Trascrivi fedelmente le formule dal PDF.
+- key_concepts: array di 3-6 concetti chiave
+- mini_quiz: array di 3 domande a scelta multipla:
   { "question": "...", "options": ["A", "B", "C", "D"], "correct_index": 0 }
 
-Rispondi SOLO con un array JSON valido:
+Rispondi SOLO con un array JSON valido, nessun testo prima o dopo:
 [
   {
     "topic_id": "...",
@@ -161,18 +184,14 @@ Rispondi SOLO con un array JSON valido:
 
   const response = await anthropic.messages.create({
     model: "claude-opus-4-6",
-    max_tokens: 8192,
+    max_tokens: 16000,
     messages: [
       {
         role: "user",
         content: [
           {
             type: "document",
-            source: {
-              type: "base64",
-              media_type: "application/pdf",
-              data: pdfBase64,
-            },
+            source: { type: "base64", media_type: "application/pdf", data: pdfBase64 },
           },
           { type: "text", text: prompt },
         ],
@@ -183,6 +202,5 @@ Rispondi SOLO con un array JSON valido:
   const text = response.content[0].type === "text" ? response.content[0].text : "";
   const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) throw new Error("No JSON array found in response");
-
   return JSON.parse(jsonMatch[0]) as ExtractedLesson[];
 }
