@@ -12,23 +12,30 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const {
     storagePath,
-    bookTitle,
+    sourceDocumentId,
     chapterTitle,
-    subject,
-    docType,
-    engineering = "tutti",
-    section = "tutti",
     chapterIndex,
     totalChapters,
-    lessonOrderStart = 1,
-    sourceDocumentId: incomingSourceDocId = null,
   } = body;
 
-  if (!storagePath || !bookTitle || !chapterTitle || !subject || !docType) {
-    return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+  if (!storagePath || !sourceDocumentId || !chapterTitle) {
+    return NextResponse.json({ error: "Missing fields: storagePath, sourceDocumentId, chapterTitle" }, { status: 400 });
   }
 
   const supabase = createAdminClient();
+
+  // Fetch book metadata from DB — no need to send it from the client
+  const { data: doc, error: docError } = await supabase
+    .from("source_documents")
+    .select("title, subject, doc_type, engineering, section")
+    .eq("id", sourceDocumentId)
+    .single();
+
+  if (docError || !doc) {
+    return NextResponse.json({ error: "Book not found" }, { status: 404 });
+  }
+
+  const { title: bookTitle, subject, doc_type: docType, engineering, section } = doc;
 
   // Download PDF from Supabase Storage
   const { data: fileData, error: downloadError } = await supabase.storage
@@ -39,30 +46,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Storage download failed: ${downloadError?.message}` }, { status: 500 });
   }
 
-  // Convert to base64
   const arrayBuffer = await fileData.arrayBuffer();
   const base64 = Buffer.from(arrayBuffer).toString("base64");
 
-  // Clean up from storage immediately (fire and forget — don't block processing)
+  // Clean up from storage immediately
   supabase.storage.from("tmp-pdfs").remove([storagePath]).catch(() => {});
-
-  let sourceDocumentId: string | null = incomingSourceDocId;
-
-  // Create source document only on the first chapter
-  if (!sourceDocumentId) {
-    const { data: doc, error: docError } = await supabase
-      .from("source_documents")
-      .insert({ subject, doc_type: docType, title: bookTitle, engineering, section })
-      .select()
-      .single();
-    if (docError || !doc) {
-      return NextResponse.json({ error: "Failed to create source document" }, { status: 500 });
-    }
-    sourceDocumentId = doc.id;
-  }
 
   try {
     if (docType === "libro_teoria") {
+      // Auto-compute lessonOrderStart from existing lessons for this book
+      const { data: maxRow } = await supabase
+        .from("theory_lessons")
+        .select("lesson_order")
+        .eq("source_document_id", sourceDocumentId)
+        .order("lesson_order", { ascending: false })
+        .limit(1)
+        .single();
+      const lessonOrderStart = (maxRow?.lesson_order ?? 0) + 1;
+
       const lessons = await extractTheoryFromPdf(base64, subject, {
         bookTitle, chapterTitle, chapterIndex, totalChapters,
       });
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      return NextResponse.json({ sourceDocumentId, extracted: lessons.length });
+      return NextResponse.json({ extracted: lessons.length });
     } else {
       const exercises = await extractExercisesFromPdf(base64, subject, docType, {
         bookTitle, chapterTitle, chapterIndex, totalChapters,
@@ -108,10 +109,10 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      return NextResponse.json({ sourceDocumentId, extracted: exercises.length });
+      return NextResponse.json({ extracted: exercises.length });
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ sourceDocumentId, extracted: 0, error: msg });
+    return NextResponse.json({ extracted: 0, error: msg });
   }
 }

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { PDFDocument } from "pdf-lib";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import {
   Upload, CheckCircle, AlertCircle, Loader2,
-  BookOpen, PenLine, Eye, Pencil, Trash2, Save, X, Plus, Library,
+  BookOpen, PenLine, Eye, Pencil, Trash2, Save, X, Plus, Library, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MathText } from "@/components/MathText";
@@ -107,7 +106,7 @@ function StatusBanner({ status, message }: { status: Status; message?: string })
       {status === "done" && <CheckCircle className="h-4 w-4 shrink-0" />}
       {status === "error" && <AlertCircle className="h-4 w-4 shrink-0" />}
       <span>
-        {status === "uploading" && "Caricamento..."}
+        {status === "uploading" && "Caricamento su Supabase Storage..."}
         {status === "processing" && "Claude sta analizzando il PDF — può richiedere 1–2 minuti..."}
         {status === "done" && (message || "Completato!")}
         {status === "error" && (message || "Errore durante il processing.")}
@@ -234,12 +233,44 @@ function ExerciseCard({
   );
 }
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface SourceDocument {
+  id: string;
+  title: string;
+  subject: string;
+  doc_type: string;
+  engineering: string;
+  section: string;
+}
+
 // ── Main admin page ───────────────────────────────────────────────────────────
 export default function AdminPage() {
   const [secret, setSecret] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
 
-  // Upload form state
+  // ── Books ──────────────────────────────────────────────────────────────────
+  const [books, setBooks] = useState<SourceDocument[]>([]);
+  const [loadingBooks, setLoadingBooks] = useState(false);
+  const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
+
+  // Create book form
+  const [showCreateBook, setShowCreateBook] = useState(false);
+  const [newBookTitle, setNewBookTitle] = useState("");
+  const [newBookSubject, setNewBookSubject] = useState("analisi1");
+  const [newBookDocType, setNewBookDocType] = useState("libro_teoria");
+  const [newBookEngineering, setNewBookEngineering] = useState("tutti");
+  const [newBookSection, setNewBookSection] = useState("tutti");
+  const [creatingBook, setCreatingBook] = useState(false);
+
+  // Chapter upload form
+  const [chapterTitle, setChapterTitle] = useState("");
+  const [chapterIndex, setChapterIndex] = useState("");
+  const [totalChapters, setTotalChapters] = useState("");
+  const [chapterFile, setChapterFile] = useState<File | null>(null);
+  const [chapterStatus, setChapterStatus] = useState<Status>("idle");
+  const [chapterMsg, setChapterMsg] = useState("");
+
+  // ── Upload form state (exercises / theory tabs) ─────────────────────────
   const [exFile, setExFile] = useState<File | null>(null);
   const [exSubject, setExSubject] = useState("analisi1");
   const [exSource, setExSource] = useState("eserciziario");
@@ -258,30 +289,53 @@ export default function AdminPage() {
   const [thStatus, setThStatus] = useState<Status>("idle");
   const [thMsg, setThMsg] = useState("");
 
-  // Book (multi-chapter) shared state
-  const [bookTitle, setBookTitle] = useState("");
-  const [bookSubject, setBookSubject] = useState("analisi1");
-  const [bookDocType, setBookDocType] = useState("libro_teoria");
-  const [bookEngineering, setBookEngineering] = useState("tutti");
-  const [bookSection, setBookSection] = useState("tutti");
-  const [bookMode, setBookMode] = useState<"manual" | "auto">("auto");
-  const [bookStatus, setBookStatus] = useState<Status>("idle");
-  const [bookMsg, setBookMsg] = useState("");
+  // Review state
+  const [reviewSubject, setReviewSubject] = useState("analisi1");
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [loadingReview, setLoadingReview] = useState(false);
 
-  // Manual mode
-  interface ManualChapter { title: string; file: File | null }
-  const [chapters, setChapters] = useState<ManualChapter[]>([{ title: "", file: null }]);
+  // ── Load books ─────────────────────────────────────────────────────────────
+  const loadBooks = useCallback(async () => {
+    setLoadingBooks(true);
+    const res = await fetch("/api/admin/books", {
+      headers: { "x-admin-secret": secret },
+    });
+    const data = await res.json();
+    setBooks(data.books || []);
+    setLoadingBooks(false);
+  }, [secret]);
 
-  function addChapter() { setChapters((prev) => [...prev, { title: "", file: null }]); }
-  function removeChapter(i: number) { setChapters((prev) => prev.filter((_, idx) => idx !== i)); }
-  function updateChapter(i: number, patch: Partial<ManualChapter>) {
-    setChapters((prev) => prev.map((ch, idx) => idx === i ? { ...ch, ...patch } : ch));
+  useEffect(() => {
+    if (authenticated) loadBooks();
+  }, [authenticated, loadBooks]);
+
+  // ── Create book ────────────────────────────────────────────────────────────
+  async function createBook() {
+    if (!newBookTitle) return;
+    setCreatingBook(true);
+    const res = await fetch("/api/admin/books", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-secret": secret },
+      body: JSON.stringify({
+        title: newBookTitle,
+        subject: newBookSubject,
+        doc_type: newBookDocType,
+        engineering: newBookEngineering,
+        section: newBookSection,
+      }),
+    });
+    const data = await res.json();
+    setCreatingBook(false);
+    if (data.book) {
+      setBooks((prev) => [data.book, ...prev]);
+      setSelectedBookId(data.book.id);
+      setShowCreateBook(false);
+      setNewBookTitle("");
+    }
   }
 
-  // Get a signed upload URL from the API, then upload directly to Supabase Storage.
-  // This bypasses Vercel entirely — the file goes browser → Supabase directly.
+  // ── Upload PDF to Supabase Storage via signed URL ─────────────────────────
   async function uploadToStorage(file: File, label: string): Promise<string> {
-    // 1. Ask the API for a signed upload URL
     const urlRes = await fetch("/api/admin/storage-upload-url", {
       method: "POST",
       headers: { "content-type": "application/json", "x-admin-secret": secret },
@@ -293,229 +347,50 @@ export default function AdminPage() {
     }
     const { signedUrl, path } = await urlRes.json();
 
-    // 2. Upload directly to Supabase Storage using the signed URL (no Vercel involvement)
     const uploadRes = await fetch(signedUrl, {
       method: "PUT",
       headers: { "content-type": "application/pdf" },
       body: file,
     });
-    if (!uploadRes.ok) {
-      throw new Error(`Upload fallito: ${uploadRes.status} ${uploadRes.statusText}`);
-    }
+    if (!uploadRes.ok) throw new Error(`Upload fallito: ${uploadRes.status} ${uploadRes.statusText}`);
     return path;
   }
 
-  // Process one chapter via API (JSON body with storagePath)
-  async function processChapter({
-    storagePath,
-    chapterTitle,
-    chapterIndex,
-    totalChapters,
-    sourceDocumentId,
-    lessonOrderStart,
-  }: {
-    storagePath: string;
-    chapterTitle: string;
-    chapterIndex: number;
-    totalChapters: number;
-    sourceDocumentId: string | null;
-    lessonOrderStart: number;
-  }) {
-    const res = await fetch("/api/admin/process-chapter", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-admin-secret": secret },
-      body: JSON.stringify({
-        storagePath,
-        bookTitle,
-        chapterTitle,
-        subject: bookSubject,
-        docType: bookDocType,
-        engineering: bookEngineering,
-        section: bookSection,
-        chapterIndex,
-        totalChapters,
-        lessonOrderStart,
-        sourceDocumentId,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `Errore capitolo ${chapterIndex}`);
-    return data as { sourceDocumentId: string; extracted: number; error?: string };
-  }
-
-  async function handleBookUpload() {
-    const validChapters = chapters.filter((ch) => ch.title && ch.file);
-    if (!bookTitle || validChapters.length === 0) return;
-    setBookStatus("processing");
-    setBookMsg("");
-
-    let sourceDocumentId: string | null = null;
-    let totalExtracted = 0;
-    let lessonOrderStart = 1;
-
+  // ── Process one chapter ────────────────────────────────────────────────────
+  async function handleChapterUpload() {
+    if (!chapterFile || !chapterTitle || !selectedBookId) return;
+    setChapterStatus("uploading");
+    setChapterMsg("");
     try {
-      for (let i = 0; i < validChapters.length; i++) {
-        const ch = validChapters[i];
-        setBookMsg(`Caricamento capitolo ${i + 1} di ${validChapters.length}: "${ch.title}"…`);
-        const storagePath = await uploadToStorage(ch.file!, ch.title);
-        setBookMsg(`Elaborazione capitolo ${i + 1} di ${validChapters.length}: "${ch.title}"…`);
-        const result = await processChapter({
-          storagePath,
-          chapterTitle: ch.title,
-          chapterIndex: i + 1,
-          totalChapters: validChapters.length,
-          sourceDocumentId,
-          lessonOrderStart,
-        });
-        sourceDocumentId = result.sourceDocumentId;
-        totalExtracted += result.extracted;
-        lessonOrderStart += result.extracted;
-      }
-      const label = bookDocType === "libro_teoria" ? "lezioni" : "esercizi";
-      setBookMsg(`Libro processato: ${totalExtracted} ${label} estratti da ${validChapters.length} capitoli.`);
-      setBookStatus("done");
-    } catch (err) {
-      setBookMsg(err instanceof Error ? err.message : "Errore");
-      setBookStatus("error");
-    }
-  }
-
-  // Auto-split mode
-  interface AutoChapter { title: string; toc_page: number; pdf_page_index: number }
-  const [autoFile, setAutoFile] = useState<File | null>(null);
-  const [autoChapters, setAutoChapters] = useState<AutoChapter[]>([]);
-  const [analyzeStatus, setAnalyzeStatus] = useState<Status>("idle");
-  const [analyzeMsg, setAnalyzeMsg] = useState("");
-
-  function updateAutoChapter(i: number, patch: Partial<AutoChapter>) {
-    setAutoChapters((prev) => prev.map((ch, idx) => idx === i ? { ...ch, ...patch } : ch));
-  }
-  function removeAutoChapter(i: number) {
-    setAutoChapters((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
-  const [autoProgress, setAutoProgress] = useState<{ current: number; total: number } | null>(null);
-  const fullPdfRef = useRef<PDFDocument | null>(null);
-
-  async function handleAnalyzeToc() {
-    if (!autoFile) return;
-    setAnalyzeStatus("processing");
-    setAnalyzeMsg("Lettura PDF e analisi indice...");
-    setAutoChapters([]);
-    try {
-      // Load and cache full PDF in memory
-      const arrayBuffer = await autoFile.arrayBuffer();
-      const fullPdf = await PDFDocument.load(arrayBuffer);
-      fullPdfRef.current = fullPdf;
-      const totalPages = fullPdf.getPageCount();
-
-      // Send only first 50 pages to keep payload small (TOC is always at the start)
-      const tocPageCount = Math.min(50, totalPages);
-      const tocPdf = await PDFDocument.create();
-      const tocPages = await tocPdf.copyPages(fullPdf, Array.from({ length: tocPageCount }, (_, i) => i));
-      tocPages.forEach((p) => tocPdf.addPage(p));
-      const tocBytes = await tocPdf.save();
-      const tocBlob = new Blob([tocBytes.buffer as ArrayBuffer], { type: "application/pdf" });
-
-      const formData = new FormData();
-      formData.append("file", tocBlob, autoFile.name);
-
-      const res = await fetch("/api/admin/analyze-toc", {
+      const storagePath = await uploadToStorage(chapterFile, chapterTitle);
+      setChapterStatus("processing");
+      const res = await fetch("/api/admin/process-chapter", {
         method: "POST",
-        headers: { "x-admin-secret": secret },
-        body: formData,
+        headers: { "content-type": "application/json", "x-admin-secret": secret },
+        body: JSON.stringify({
+          storagePath,
+          sourceDocumentId: selectedBookId,
+          chapterTitle,
+          chapterIndex: chapterIndex ? parseInt(chapterIndex) : undefined,
+          totalChapters: totalChapters ? parseInt(totalChapters) : undefined,
+        }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setAutoChapters(data.chapters);
-      setAnalyzeStatus("done");
-      setAnalyzeMsg(`Trovati ${data.chapters.length} capitoli — controlla i titoli e processa.`);
+      if (!res.ok) throw new Error(data.error || "Errore");
+      const book = books.find((b) => b.id === selectedBookId);
+      const label = book?.doc_type === "libro_teoria" ? "lezioni" : "esercizi";
+      setChapterMsg(`Estratti ${data.extracted} ${label} da "${chapterTitle}"`);
+      setChapterStatus("done");
+      setChapterTitle("");
+      setChapterFile(null);
+      setChapterIndex("");
     } catch (err) {
-      setAnalyzeMsg(err instanceof Error ? err.message : "Errore");
-      setAnalyzeStatus("error");
+      setChapterMsg(err instanceof Error ? err.message : "Errore");
+      setChapterStatus("error");
     }
   }
 
-  async function handleAutoBookProcess() {
-    if (!autoFile || autoChapters.length === 0 || !bookTitle) return;
-    setBookStatus("processing");
-    setBookMsg("Suddivisione capitoli nel browser…");
-    setAutoProgress(null);
-    try {
-      let fullPdf = fullPdfRef.current;
-      if (!fullPdf) {
-        const arrayBuffer = await autoFile.arrayBuffer();
-        fullPdf = await PDFDocument.load(arrayBuffer);
-        fullPdfRef.current = fullPdf;
-      }
-      const totalPages = fullPdf.getPageCount();
-
-      let sourceDocumentId: string | null = null;
-      let totalExtracted = 0;
-      let lessonOrderStart = 1;
-
-      for (let i = 0; i < autoChapters.length; i++) {
-        const chapter = autoChapters[i];
-        setAutoProgress({ current: i + 1, total: autoChapters.length });
-        setBookMsg(`Caricamento capitolo ${i + 1} di ${autoChapters.length}: "${chapter.title}"…`);
-
-        // Slice chapter pages
-        const startPage = Math.max(0, Math.min(chapter.pdf_page_index, totalPages - 1));
-        const endPage = i < autoChapters.length - 1
-          ? Math.max(startPage, Math.min(autoChapters[i + 1].pdf_page_index - 1, totalPages - 1))
-          : totalPages - 1;
-
-        const chapterPdf = await PDFDocument.create();
-        const pageIndices = Array.from({ length: endPage - startPage + 1 }, (_, k) => startPage + k);
-        const copiedPages = await chapterPdf.copyPages(fullPdf, pageIndices);
-        copiedPages.forEach((p) => chapterPdf.addPage(p));
-        const chapterBytes = await chapterPdf.save();
-        const chapterBlob = new Blob([chapterBytes.buffer as ArrayBuffer], { type: "application/pdf" });
-        const chapterFile = new File([chapterBlob], `${chapter.title}.pdf`, { type: "application/pdf" });
-
-        // Upload to Storage
-        const storagePath = await uploadToStorage(chapterFile, chapter.title);
-        setBookMsg(`Elaborazione capitolo ${i + 1} di ${autoChapters.length}: "${chapter.title}"…`);
-
-        const result = await processChapter({
-          storagePath,
-          chapterTitle: chapter.title,
-          chapterIndex: i + 1,
-          totalChapters: autoChapters.length,
-          sourceDocumentId,
-          lessonOrderStart,
-        });
-        sourceDocumentId = result.sourceDocumentId;
-        totalExtracted += result.extracted;
-        lessonOrderStart += result.extracted;
-      }
-
-      const label = bookDocType === "libro_teoria" ? "lezioni" : "esercizi";
-      setBookMsg(`Libro processato: ${totalExtracted} ${label} estratti da ${autoChapters.length} capitoli.`);
-      setBookStatus("done");
-      setAutoProgress(null);
-    } catch (err) {
-      setBookMsg(err instanceof Error ? err.message : "Errore");
-      setBookStatus("error");
-      setAutoProgress(null);
-    }
-  }
-
-  // Review state
-  const [reviewSubject, setReviewSubject] = useState("analisi1");
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [loadingReview, setLoadingReview] = useState(false);
-
-  async function loadExercises() {
-    setLoadingReview(true);
-    const res = await fetch(`/api/admin/exercises?subject=${reviewSubject}`, {
-      headers: { "x-admin-secret": secret },
-    });
-    const data = await res.json();
-    setExercises(data.exercises || []);
-    setLoadingReview(false);
-  }
-
+  // ── Exercise upload ────────────────────────────────────────────────────────
   async function handleExerciseUpload() {
     if (!exFile || !exTitle) return;
     setExStatus("processing");
@@ -546,6 +421,7 @@ export default function AdminPage() {
     }
   }
 
+  // ── Theory upload ──────────────────────────────────────────────────────────
   async function handleTheoryUpload() {
     if (!thFile || !thTitle) return;
     setThStatus("processing");
@@ -573,6 +449,19 @@ export default function AdminPage() {
       setThStatus("error");
     }
   }
+
+  // ── Review ─────────────────────────────────────────────────────────────────
+  async function loadExercises() {
+    setLoadingReview(true);
+    const res = await fetch(`/api/admin/exercises?subject=${reviewSubject}`, {
+      headers: { "x-admin-secret": secret },
+    });
+    const data = await res.json();
+    setExercises(data.exercises || []);
+    setLoadingReview(false);
+  }
+
+  const selectedBook = books.find((b) => b.id === selectedBookId) ?? null;
 
   if (!authenticated) {
     return (
@@ -614,198 +503,166 @@ export default function AdminPage() {
             <TabsTrigger value="review" className="flex-1 gap-1.5"><Eye className="h-4 w-4" />Rivedi</TabsTrigger>
           </TabsList>
 
-          {/* ── BOOK (multi-chapter) ── */}
+          {/* ── BOOK TAB ── */}
           <TabsContent value="book" className="space-y-4 mt-4">
+
+            {/* Step 1: Books list */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Carica un libro</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">1 — Seleziona o crea un libro</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1"
+                    onClick={() => setShowCreateBook((v) => !v)}
+                  >
+                    {showCreateBook ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                    {showCreateBook ? "Annulla" : "Nuovo libro"}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Shared fields */}
-                <Field label="Titolo del libro">
-                  <Input value={bookTitle} onChange={(e) => setBookTitle(e.target.value)}
-                    placeholder="es. Bramanti Pagani Salsa — Analisi Matematica 1" />
-                </Field>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Materia">
-                    <NativeSelect value={bookSubject} onChange={setBookSubject}
-                      options={SUBJECTS.map((s) => ({ id: s.id, name: s.name }))} />
-                  </Field>
-                  <Field label="Tipo documento">
-                    <NativeSelect value={bookDocType} onChange={setBookDocType}
-                      options={[
-                        { id: "libro_teoria", name: "Libro di teoria" },
-                        { id: "eserciziario", name: "Eserciziario" },
-                      ]} />
-                  </Field>
-                  <Field label="Corso di ingegneria">
-                    <NativeSelect value={bookEngineering} onChange={setBookEngineering}
-                      options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))} />
-                  </Field>
-                  <Field label="Scaglione">
-                    <NativeSelect value={bookSection} onChange={setBookSection}
-                      options={SECTIONS.map((s) => ({ id: s, name: s === "tutti" ? "Tutti gli scaglioni" : `Scaglione ${s}` }))} />
-                  </Field>
-                </div>
 
-                <Separator />
-
-                {/* Mode toggle */}
-                <div className="flex rounded-lg border overflow-hidden text-sm">
-                  <button
-                    onClick={() => setBookMode("auto")}
-                    className={cn(
-                      "flex-1 py-2 font-medium transition-colors",
-                      bookMode === "auto" ? "bg-primary text-white" : "hover:bg-muted/50"
-                    )}
-                  >
-                    Auto-split (PDF unico)
-                  </button>
-                  <button
-                    onClick={() => setBookMode("manual")}
-                    className={cn(
-                      "flex-1 py-2 font-medium transition-colors border-l",
-                      bookMode === "manual" ? "bg-primary text-white" : "hover:bg-muted/50"
-                    )}
-                  >
-                    Manuale (un PDF per capitolo)
-                  </button>
-                </div>
-
-                {/* ── AUTO SPLIT ── */}
-                {bookMode === "auto" && (
-                  <div className="space-y-4">
-                    <p className="text-xs text-muted-foreground">
-                      Carica il PDF completo del libro. Claude leggerà l&apos;indice, troverà la pagina esatta di ogni capitolo (anche se le pagine dell&apos;indice non corrispondono a quelle PDF), e dividerà automaticamente il libro per te.
-                    </p>
-
-                    <FileUploadZone file={autoFile} onChange={setAutoFile} />
-
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={handleAnalyzeToc}
-                      disabled={!autoFile || analyzeStatus === "processing"}
-                    >
-                      {analyzeStatus === "processing"
-                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Analisi indice in corso...</>
-                        : <><BookOpen className="h-4 w-4 mr-2" />Analizza indice</>}
+                {/* Create book inline form */}
+                {showCreateBook && (
+                  <div className="border rounded-xl p-4 space-y-3 bg-muted/20">
+                    <p className="text-sm font-medium">Nuovo libro</p>
+                    <Field label="Titolo">
+                      <Input
+                        value={newBookTitle}
+                        onChange={(e) => setNewBookTitle(e.target.value)}
+                        placeholder="es. Bramanti Pagani Salsa — Analisi Matematica 1"
+                      />
+                    </Field>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Materia">
+                        <NativeSelect value={newBookSubject} onChange={setNewBookSubject}
+                          options={SUBJECTS.map((s) => ({ id: s.id, name: s.name }))} />
+                      </Field>
+                      <Field label="Tipo">
+                        <NativeSelect value={newBookDocType} onChange={setNewBookDocType}
+                          options={[
+                            { id: "libro_teoria", name: "Libro di teoria" },
+                            { id: "eserciziario", name: "Eserciziario" },
+                          ]} />
+                      </Field>
+                      <Field label="Ingegneria">
+                        <NativeSelect value={newBookEngineering} onChange={setNewBookEngineering}
+                          options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))} />
+                      </Field>
+                      <Field label="Scaglione">
+                        <NativeSelect value={newBookSection} onChange={setNewBookSection}
+                          options={SECTIONS.map((s) => ({ id: s, name: s === "tutti" ? "Tutti" : `Scaglione ${s}` }))} />
+                      </Field>
+                    </div>
+                    <Button onClick={createBook} disabled={!newBookTitle || creatingBook} className="w-full">
+                      {creatingBook ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creazione...</> : "Crea libro"}
                     </Button>
-
-                    {analyzeStatus !== "idle" && (
-                      <StatusBanner status={analyzeStatus} message={analyzeMsg} />
-                    )}
-
-                    {autoChapters.length > 0 && (
-                      <div className="space-y-2">
-                        <Label>Capitoli trovati — modifica se necessario</Label>
-                        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                          {autoChapters.map((ch, i) => (
-                            <div key={i} className="flex items-center gap-2 border rounded-lg px-3 py-2 bg-muted/20">
-                              <span className="text-xs text-muted-foreground w-5 shrink-0">#{i + 1}</span>
-                              <Input
-                                className="flex-1 h-7 text-xs"
-                                value={ch.title}
-                                onChange={(e) => updateAutoChapter(i, { title: e.target.value })}
-                              />
-                              <span className="text-xs text-muted-foreground shrink-0 w-20 text-right">
-                                pag. indice {ch.toc_page} → PDF {ch.pdf_page_index}
-                              </span>
-                              <button onClick={() => removeAutoChapter(i)} className="p-1 rounded hover:bg-red-50 text-red-400 shrink-0">
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-
-                        {autoProgress && (
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-xs text-muted-foreground">
-                              <span>Capitolo {autoProgress.current} di {autoProgress.total}</span>
-                              <span>{Math.round((autoProgress.current / autoProgress.total) * 100)}%</span>
-                            </div>
-                            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                              <div
-                                className="h-full bg-primary transition-all duration-500"
-                                style={{ width: `${(autoProgress.current / autoProgress.total) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        <StatusBanner status={bookStatus} message={bookMsg} />
-
-                        <Button
-                          className="w-full"
-                          onClick={handleAutoBookProcess}
-                          disabled={!bookTitle || bookStatus === "processing"}
-                        >
-                          {bookStatus === "processing"
-                            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Elaborazione...</>
-                            : <><Library className="h-4 w-4 mr-2" />Processa tutto il libro ({autoChapters.length} capitoli)</>}
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 )}
 
-                {/* ── MANUAL ── */}
-                {bookMode === "manual" && (
-                  <div className="space-y-3">
-                    <p className="text-xs text-muted-foreground">
-                      Carica ogni capitolo come PDF separato. Claude sa che fanno parte dello stesso libro e mantiene la coerenza tra i capitoli.
-                    </p>
-
-                    <div className="flex items-center justify-between">
-                      <Label>Capitoli ({chapters.length})</Label>
-                      <button onClick={addChapter} className="flex items-center gap-1 text-sm text-primary hover:underline">
-                        <Plus className="h-3.5 w-3.5" />Aggiungi capitolo
-                      </button>
-                    </div>
-
-                    {chapters.map((ch, i) => (
-                      <div key={i} className="border rounded-xl p-3 space-y-2 bg-muted/20">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-muted-foreground w-6">#{i + 1}</span>
-                          <Input
-                            className="flex-1 h-8 text-sm"
-                            placeholder="Titolo capitolo (es. Capitolo 3 — Derivate)"
-                            value={ch.title}
-                            onChange={(e) => updateChapter(i, { title: e.target.value })}
-                          />
-                          {chapters.length > 1 && (
-                            <button onClick={() => removeChapter(i)} className="p-1 rounded hover:bg-red-50 text-red-400 shrink-0">
-                              <X className="h-4 w-4" />
-                            </button>
-                          )}
+                {/* Books list */}
+                {loadingBooks ? (
+                  <div className="flex justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : books.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    Nessun libro ancora. Creane uno con il pulsante qui sopra.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {books.map((book) => (
+                      <button
+                        key={book.id}
+                        onClick={() => { setSelectedBookId(book.id); setChapterStatus("idle"); setChapterMsg(""); }}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors",
+                          selectedBookId === book.id
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/30 hover:bg-muted/30"
+                        )}
+                      >
+                        <Library className={cn("h-4 w-4 shrink-0", selectedBookId === book.id ? "text-primary" : "text-muted-foreground")} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{book.title}</p>
+                          <div className="flex gap-1.5 mt-0.5">
+                            <span className="text-xs text-muted-foreground">{book.subject}</span>
+                            <span className="text-xs text-muted-foreground">·</span>
+                            <span className="text-xs text-muted-foreground">{book.doc_type === "libro_teoria" ? "teoria" : "esercizi"}</span>
+                            {book.engineering !== "tutti" && <>
+                              <span className="text-xs text-muted-foreground">·</span>
+                              <span className="text-xs text-muted-foreground">{book.engineering}</span>
+                            </>}
+                          </div>
                         </div>
-                        <label className={cn(
-                          "flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer text-sm transition-colors",
-                          ch.file ? "border-primary bg-primary/5 text-primary" : "border-dashed border-muted hover:border-primary/50"
-                        )}>
-                          <input type="file" accept=".pdf" className="hidden"
-                            onChange={(e) => updateChapter(i, { file: e.target.files?.[0] || null })} />
-                          <Upload className="h-4 w-4 shrink-0" />
-                          {ch.file ? `${ch.file.name} (${(ch.file.size / 1024 / 1024).toFixed(1)} MB)` : "Seleziona PDF capitolo"}
-                        </label>
-                      </div>
+                        <ChevronRight className={cn("h-4 w-4 shrink-0 transition-opacity", selectedBookId === book.id ? "opacity-100 text-primary" : "opacity-0")} />
+                      </button>
                     ))}
-
-                    <StatusBanner status={bookStatus} message={bookMsg} />
-
-                    <Button
-                      className="w-full"
-                      onClick={handleBookUpload}
-                      disabled={!bookTitle || chapters.filter((c) => c.title && c.file).length === 0 || bookStatus === "processing"}
-                    >
-                      {bookStatus === "processing"
-                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Elaborazione capitoli...</>
-                        : <><Library className="h-4 w-4 mr-2" />Processa tutto il libro</>}
-                    </Button>
                   </div>
                 )}
               </CardContent>
             </Card>
+
+            {/* Step 2: Add chapter */}
+            {selectedBook && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">2 — Aggiungi capitolo</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Libro: <span className="font-medium text-foreground">{selectedBook.title}</span>
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Field label="Titolo capitolo">
+                    <Input
+                      value={chapterTitle}
+                      onChange={(e) => setChapterTitle(e.target.value)}
+                      placeholder="es. Capitolo 3 — Derivate — Parte 1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Includi &quot;Parte 1&quot;, &quot;Parte 2&quot; nel titolo se il capitolo è diviso in più PDF.
+                    </p>
+                  </Field>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="N° capitolo (opzionale)">
+                      <Input
+                        type="number"
+                        value={chapterIndex}
+                        onChange={(e) => setChapterIndex(e.target.value)}
+                        placeholder="es. 3"
+                      />
+                    </Field>
+                    <Field label="Totale capitoli (opzionale)">
+                      <Input
+                        type="number"
+                        value={totalChapters}
+                        onChange={(e) => setTotalChapters(e.target.value)}
+                        placeholder="es. 12"
+                      />
+                    </Field>
+                  </div>
+
+                  <FileUploadZone file={chapterFile} onChange={setChapterFile} />
+
+                  <StatusBanner status={chapterStatus} message={chapterMsg} />
+
+                  <Button
+                    className="w-full"
+                    onClick={handleChapterUpload}
+                    disabled={!chapterFile || !chapterTitle || chapterStatus === "uploading" || chapterStatus === "processing"}
+                  >
+                    {chapterStatus === "uploading" || chapterStatus === "processing"
+                      ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        {chapterStatus === "uploading" ? "Caricamento..." : "Claude sta leggendo..."}
+                        </>
+                      : <><Upload className="h-4 w-4 mr-2" />Carica e processa capitolo</>}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* ── EXERCISES UPLOAD ── */}
