@@ -66,11 +66,15 @@ export function PracticeSession({
   subjectName,
   topic,
   stats,
+  initialExerciseId,
+  backHref,
 }: {
   subject: string;
   subjectName: string;
   topic: Topic;
   stats: TopicStats | null;
+  initialExerciseId?: string;
+  backHref?: string;
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [exercise, setExercise] = useState<Exercise | null>(null);
@@ -79,6 +83,8 @@ export function PracticeSession({
   const [showHints, setShowHints] = useState(false);
   const [error, setError] = useState("");
   const canvasRef = useRef<DrawingCanvasRef>(null);
+
+  const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
 
   // Fullscreen canvas state
   const [canvasFullscreen, setCanvasFullscreen] = useState(false);
@@ -100,7 +106,13 @@ export function PracticeSession({
       ? Math.round((stats.correct / stats.exercises_done) * 100)
       : null;
 
-  async function loadExercise() {
+  // Auto-load if a specific exercise was requested
+  useEffect(() => {
+    if (initialExerciseId) loadExercise(initialExerciseId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialExerciseId]);
+
+  async function loadExercise(exerciseId?: string) {
     setPhase("loading_exercise");
     setExercise(null);
     setCorrection(null);
@@ -112,7 +124,7 @@ export function PracticeSession({
     const res = await fetch("/api/exercise/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject, topicId: topic.id }),
+      body: JSON.stringify({ subject, topicId: topic.id, exerciseId }),
     });
 
     if (!res.ok) {
@@ -122,6 +134,7 @@ export function PracticeSession({
     }
 
     const data = await res.json();
+    setCurrentExerciseId(data.id ?? null);
     setExercise(data);
     setPhase("solving");
     setTimeout(() => canvasRef.current?.clear(), 50);
@@ -172,6 +185,19 @@ export function PracticeSession({
     const data = await res.json();
     setCorrection(data);
     setPhase("feedback");
+
+    // Record the attempt
+    if (currentExerciseId) {
+      fetch("/api/exercise/attempts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exerciseId: currentExerciseId,
+          isCorrect: data.isCorrect,
+          score: data.score,
+        }),
+      }).catch(() => {});
+    }
   }
 
   return (
@@ -179,7 +205,7 @@ export function PracticeSession({
       {/* Header */}
       <header className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
         <Link
-          href={`/course/${subject}`}
+          href={backHref ?? `/course/${subject}`}
           className="inline-flex items-center justify-center rounded-lg size-8 hover:bg-muted transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -210,7 +236,7 @@ export function PracticeSession({
                 L&apos;AI genererà un esercizio calibrato sul tuo livello
               </p>
             </div>
-            <Button size="lg" onClick={loadExercise}>
+            <Button size="lg" onClick={() => loadExercise()}>
               Genera esercizio
             </Button>
           </div>
@@ -414,7 +440,7 @@ export function PracticeSession({
               </Card>
             )}
 
-            <Button size="lg" className="w-full" onClick={loadExercise}>
+            <Button size="lg" className="w-full" onClick={() => loadExercise()}>
               Prossimo esercizio
             </Button>
           </>

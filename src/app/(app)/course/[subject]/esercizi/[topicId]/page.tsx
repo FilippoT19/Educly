@@ -76,7 +76,6 @@ export default async function EserciziCategoryPage({ params }: PageProps) {
         allTags={allTags}
         subject={subject}
         categoryId={resolvedCategory.id}
-        categoryName={resolvedCategory.name}
       />
     </div>
   );

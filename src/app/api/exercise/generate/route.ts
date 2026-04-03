@@ -11,7 +11,26 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
 
-  const { subject, topicId } = await request.json();
+  const { subject, topicId, exerciseId } = await request.json();
+
+  // If a specific exercise is requested, load it directly
+  if (exerciseId) {
+    const { data: ex } = await supabase
+      .from("exercises")
+      .select("*")
+      .eq("id", exerciseId)
+      .single();
+    if (!ex) return NextResponse.json({ error: "Esercizio non trovato" }, { status: 404 });
+    return NextResponse.json({
+      id: ex.id,
+      text: ex.question_latex,
+      solution: ex.solution_latex,
+      difficulty: ex.difficulty,
+      hints: ex.hints || [],
+      source: ex.source,
+      fromDb: true,
+    });
+  }
 
   const curriculum = curricula[subject];
   if (!curriculum) return NextResponse.json({ error: "Materia non trovata" }, { status: 400 });
