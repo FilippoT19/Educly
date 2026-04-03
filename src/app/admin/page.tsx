@@ -83,22 +83,29 @@ function NativeSelect({ value, onChange, options }: {
   );
 }
 
-function FilePickerRow({ file, onChange, disabled }: {
-  file: File | null; onChange: (f: File | null) => void; disabled?: boolean;
+function FilePickerRow({ file, onChange, disabled, accept = ".pdf" }: {
+  file: File | null; onChange: (f: File | null) => void; disabled?: boolean; accept?: string;
 }) {
+  const isLatex = file?.name.endsWith(".tex");
+  const label = accept === ".pdf,.tex" ? "Seleziona PDF o LaTeX (.tex)…" : accept === ".tex" ? "Seleziona file LaTeX (.tex)…" : "Seleziona PDF…";
   return (
     <label className={cn(
       "flex items-center gap-2.5 px-3 py-2.5 border-2 border-dashed rounded-xl cursor-pointer transition-colors text-sm",
       disabled ? "opacity-50 cursor-not-allowed" : "",
       file ? "border-primary bg-primary/5 text-primary" : "border-muted hover:border-primary/40 hover:bg-muted/20 text-muted-foreground"
     )}>
-      <input type="file" accept=".pdf" className="hidden" disabled={disabled}
+      <input type="file" accept={accept} className="hidden" disabled={disabled}
         onChange={(e) => onChange(e.target.files?.[0] || null)} />
       <Upload className="h-4 w-4 shrink-0" />
       {file ? (
-        <span className="truncate font-medium">{file.name} <span className="font-normal opacity-60">({(file.size / 1024 / 1024).toFixed(1)} MB)</span></span>
+        <span className="truncate font-medium">
+          {file.name}{" "}
+          <span className="font-normal opacity-60">
+            {isLatex ? `(${(file.size / 1024).toFixed(0)} KB)` : `(${(file.size / 1024 / 1024).toFixed(1)} MB)`}
+          </span>
+        </span>
       ) : (
-        <span>Seleziona PDF…</span>
+        <span>{label}</span>
       )}
     </label>
   );
@@ -382,25 +389,47 @@ export default function AdminPage() {
 
   async function handleProcessChapter() {
     if (!chFile || !chTitle || !detailBook) return;
-    setChStatus("uploading"); setChMsg("");
+    const isLatex = chFile.name.endsWith(".tex");
+    setChStatus(isLatex ? "processing" : "uploading");
+    setChMsg("");
     try {
-      const storagePath = await uploadToStorage(chFile, chTitle);
-      setChStatus("processing");
-      const res = await fetch("/api/admin/process-chapter", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-admin-secret": secret },
-        body: JSON.stringify({
-          storagePath, sourceDocumentId: detailBook.id, chapterTitle: chTitle,
-          chapterIndex: chIndex ? parseInt(chIndex) : undefined,
-          totalChapters: chTotal ? parseInt(chTotal) : undefined,
-        }),
-      });
+      let res: Response;
+
+      if (isLatex) {
+        // LaTeX: read as text, send directly — no storage needed
+        const latexContent = await chFile.text();
+        res = await fetch("/api/admin/process-latex", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-admin-secret": secret },
+          body: JSON.stringify({
+            latexContent,
+            sourceDocumentId: detailBook.id,
+            chapterTitle: chTitle,
+            chapterIndex: chIndex ? parseInt(chIndex) : undefined,
+            totalChapters: chTotal ? parseInt(chTotal) : undefined,
+          }),
+        });
+      } else {
+        // PDF: upload to storage first, then process
+        const storagePath = await uploadToStorage(chFile, chTitle);
+        setChStatus("processing");
+        res = await fetch("/api/admin/process-chapter", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-admin-secret": secret },
+          body: JSON.stringify({
+            storagePath, sourceDocumentId: detailBook.id, chapterTitle: chTitle,
+            chapterIndex: chIndex ? parseInt(chIndex) : undefined,
+            totalChapters: chTotal ? parseInt(chTotal) : undefined,
+          }),
+        });
+      }
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Errore");
       const label = detailBook.doc_type === "libro_teoria" ? "lezioni" : "esercizi";
-      const msg = `${data.extracted} ${label} estratti`;
       setProcessed((prev) => [...prev, { chapterTitle: chTitle, extracted: data.extracted, label }]);
-      setChMsg(msg); setChStatus("done");
+      setChMsg(`${data.extracted} ${label} estratti`);
+      setChStatus("done");
       setChTitle(""); setChFile(null); setChIndex("");
     } catch (err) {
       setChMsg(err instanceof Error ? err.message : "Errore");
@@ -641,6 +670,7 @@ export default function AdminPage() {
               <FilePickerRow
                 file={chFile}
                 onChange={setChFile}
+                accept=".pdf,.tex"
                 disabled={chStatus === "uploading" || chStatus === "processing"}
               />
 
