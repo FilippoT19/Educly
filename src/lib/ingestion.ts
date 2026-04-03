@@ -90,13 +90,19 @@ CONTESTO:
 ${contextBlock}
 Estrai TUTTI gli esercizi che trovi in questo documento.
 
+REGOLE IMPORTANTI:
+- Scrivi tutto in italiano corretto. I nomi di teoremi, lemmi e risultati devono essere in italiano (es. "teorema di Stokes", "teorema della divergenza", "criterio di Leibniz"), mai in inglese.
+- Nei campi JSON usa SOLO testo semplice e formule LaTeX matematiche. NON usare comandi LaTeX di formattazione testo come \\textbf, \\textit, \\emph, \\text, \\underline — scrivi solo testo piano.
+- Per le formule usa $...$ per inline e $$...$$ per display.
+- I tags devono essere in italiano, specifici e utili per filtrare (es. "integrazione per parti", "cambio di variabile", "teorema di Stokes").
+
 Per ogni esercizio restituisci:
 - topic_id: uno tra ${topicIds.join(", ")}
 - difficulty: 1 (facile), 2 (medio), 3 (difficile)
-- question_latex: testo completo dell'esercizio in LaTeX. Usa $...$ per formule inline e $$...$$ per display. Trascrivi fedelmente tutte le formule matematiche che vedi, anche se il documento è scannerizzato.
-- solution_latex: soluzione completa passo-passo in LaTeX. Se la soluzione non è nel documento, costruiscila tu in modo corretto e dettagliato.
-- hints: array di 2-3 suggerimenti strategici (non la soluzione completa)
-- tags: array di sottotemi specifici es. ["integrazione_per_parti", "cambio_variabile"]
+- question_latex: testo completo dell'esercizio. Testo in italiano semplice, formule in LaTeX.
+- solution_latex: soluzione completa passo-passo in italiano. Se non è nel documento, costruiscila tu in modo corretto e dettagliato.
+- hints: array di 2-3 suggerimenti strategici in italiano (non la soluzione completa)
+- tags: array di 2-5 micro-argomenti in italiano es. ["integrazione per parti", "funzioni razionali"]
 
 Rispondi SOLO con un array JSON valido, nessun testo prima o dopo:
 [
@@ -159,13 +165,17 @@ CONTESTO:
 ${contextBlock}
 Analizza questo materiale e crea lezioni di teoria strutturate.
 
+REGOLE IMPORTANTI:
+- Scrivi tutto in italiano corretto. I nomi di teoremi, lemmi e risultati devono essere in italiano (es. "teorema di Stokes", "teorema della divergenza"), mai in inglese.
+- Nei campi JSON usa testo semplice italiano e formule LaTeX matematiche. NON usare comandi LaTeX di formattazione testo come \\textbf, \\textit, \\emph — scrivi solo testo piano.
+
 Per ogni sezione/argomento distinto crea UNA lezione con:
 - topic_id: uno tra ${topicIds.join(", ")}
 - lesson_order: numero progressivo a partire da 1 (all'interno di questo PDF)
-- title: titolo chiaro e descrittivo della lezione
-- content_markdown: contenuto completo in Markdown con formule LaTeX ($...$ inline, $$...$$ display). Deve essere didattico, includere definizioni, enunciati di teoremi, eventuali dimostrazioni importanti, esempi numerici e osservazioni. Trascrivi fedelmente le formule dal PDF.
-- key_concepts: array di 3-6 concetti chiave
-- mini_quiz: array di 3 domande a scelta multipla:
+- title: titolo chiaro e descrittivo della lezione in italiano
+- content_markdown: contenuto completo in Markdown con formule LaTeX ($...$ inline, $$...$$ display). Deve essere didattico, includere definizioni, enunciati di teoremi, eventuali dimostrazioni importanti, esempi numerici e osservazioni.
+- key_concepts: array di 3-6 concetti chiave in italiano
+- mini_quiz: array di 3 domande a scelta multipla in italiano:
   { "question": "...", "options": ["A", "B", "C", "D"], "correct_index": 0 }
 
 Rispondi SOLO con un array JSON valido, nessun testo prima o dopo:

@@ -2,66 +2,48 @@
   "id": "analisi1",
   "name": "Analisi Matematica 1",
   "shortName": "Analisi 1",
-  "topics": [
+  "macroCategories": [
     {
-      "id": "insiemi_numeri",
-      "name": "Insiemi e Numeri Reali",
-      "order": 1,
-      "subtopics": ["Insiemi", "Numeri reali", "Estremo superiore e inferiore", "Valore assoluto", "Disuguaglianze"]
+      "id": "fondamenti",
+      "name": "Fondamenti",
+      "topicIds": ["insiemi_numeri", "successioni"],
+      "suggestedTags": ["insiemi", "numeri reali", "estremo superiore", "disuguaglianze", "valore assoluto", "successioni", "limite di successione", "teorema del confronto", "successioni monotone", "numero di Eulero", "successioni ricorsive", "sottosuccessioni", "criterio di Cauchy"]
     },
     {
-      "id": "successioni",
-      "name": "Successioni",
-      "order": 2,
-      "subtopics": ["Definizione e proprietà", "Limiti di successioni", "Teorema del confronto", "Successioni monotone", "Numero di Eulero", "Successioni ricorsive"]
+      "id": "limiti_continuita",
+      "name": "Limiti e Continuità",
+      "topicIds": ["limiti", "continuita"],
+      "suggestedTags": ["limite di funzione", "algebra dei limiti", "limiti notevoli", "forme indeterminate", "infiniti e infinitesimi", "o-piccolo", "continuità", "teorema degli zeri", "teorema di Weierstrass", "teorema dei valori intermedi", "discontinuità", "continuità uniforme"]
     },
     {
-      "id": "limiti",
-      "name": "Limiti di Funzioni",
-      "order": 3,
-      "subtopics": ["Definizione di limite", "Algebra dei limiti", "Limiti notevoli", "Forme indeterminate", "Infiniti e infinitesimi", "Confronto di infiniti"]
+      "id": "calcolo_differenziale",
+      "name": "Calcolo differenziale",
+      "topicIds": ["derivate", "taylor", "studio_funzione"],
+      "suggestedTags": ["derivata", "regole di derivazione", "derivata composta", "derivate successive", "teorema di Rolle", "teorema di Lagrange", "teorema di Cauchy", "De L'Hôpital", "polinomio di Taylor", "resto di Peano", "resto di Lagrange", "MacLaurin", "studio di funzione", "asintoti", "monotonia", "massimi e minimi", "concavità", "flessi"]
     },
     {
-      "id": "continuita",
-      "name": "Continuità",
-      "order": 4,
-      "subtopics": ["Funzioni continue", "Teorema degli zeri", "Teorema di Weierstrass", "Teorema dei valori intermedi", "Discontinuità"]
-    },
-    {
-      "id": "derivate",
-      "name": "Derivate",
-      "order": 5,
-      "subtopics": ["Definizione di derivata", "Regole di derivazione", "Derivata di funzioni composte", "Derivate di ordine superiore", "Teorema di Rolle", "Teorema di Lagrange", "Teorema di Cauchy", "Regola di De L'Hôpital"]
-    },
-    {
-      "id": "taylor",
-      "name": "Formula di Taylor",
-      "order": 6,
-      "subtopics": ["Polinomio di Taylor", "Resto di Peano", "Resto di Lagrange", "Sviluppi di MacLaurin notevoli", "Applicazioni"]
-    },
-    {
-      "id": "studio_funzione",
-      "name": "Studio di Funzione",
-      "order": 7,
-      "subtopics": ["Dominio", "Simmetrie", "Segno", "Limiti agli estremi", "Derivata prima e monotonia", "Massimi e minimi", "Derivata seconda e concavità", "Flessi", "Asintoti"]
-    },
-    {
-      "id": "integrali_indefiniti",
-      "name": "Integrali Indefiniti",
-      "order": 8,
-      "subtopics": ["Primitiva", "Integrali immediati", "Integrazione per parti", "Integrazione per sostituzione", "Integrali di funzioni razionali"]
-    },
-    {
-      "id": "integrali_definiti",
-      "name": "Integrali Definiti",
-      "order": 9,
-      "subtopics": ["Integrale di Riemann", "Teorema fondamentale del calcolo", "Calcolo di aree", "Calcolo di volumi di rotazione", "Integrali impropri"]
+      "id": "calcolo_integrale",
+      "name": "Calcolo integrale",
+      "topicIds": ["integrali_indefiniti", "integrali_definiti"],
+      "suggestedTags": ["primitiva", "integrali immediati", "integrazione per parti", "integrazione per sostituzione", "funzioni razionali", "integrale di Riemann", "teorema fondamentale del calcolo", "calcolo di aree", "volumi di rotazione", "integrali impropri", "convergenza di integrali impropri", "criterio del confronto integrale"]
     },
     {
       "id": "serie",
-      "name": "Serie Numeriche",
-      "order": 10,
-      "subtopics": ["Definizione e convergenza", "Serie geometrica", "Serie armonica", "Criteri di convergenza", "Serie a segni alterni", "Convergenza assoluta"]
+      "name": "Serie numeriche",
+      "topicIds": ["serie"],
+      "suggestedTags": ["serie convergente", "serie divergente", "serie geometrica", "serie armonica", "criterio del rapporto", "criterio della radice", "criterio del confronto", "criterio di Leibniz", "serie a segni alterni", "convergenza assoluta", "convergenza condizionata", "serie di Mengoli", "serie telescopica"]
     }
+  ],
+  "topics": [
+    { "id": "insiemi_numeri",        "name": "Insiemi e Numeri Reali",   "order": 1,  "subtopics": ["Insiemi", "Numeri reali", "Estremo superiore e inferiore", "Valore assoluto", "Disuguaglianze"] },
+    { "id": "successioni",           "name": "Successioni",              "order": 2,  "subtopics": ["Definizione e proprietà", "Limiti di successioni", "Teorema del confronto", "Successioni monotone", "Numero di Eulero", "Successioni ricorsive"] },
+    { "id": "limiti",                "name": "Limiti di Funzioni",       "order": 3,  "subtopics": ["Definizione di limite", "Algebra dei limiti", "Limiti notevoli", "Forme indeterminate", "Infiniti e infinitesimi", "Confronto di infiniti"] },
+    { "id": "continuita",            "name": "Continuità",               "order": 4,  "subtopics": ["Funzioni continue", "Teorema degli zeri", "Teorema di Weierstrass", "Teorema dei valori intermedi", "Discontinuità"] },
+    { "id": "derivate",              "name": "Derivate",                 "order": 5,  "subtopics": ["Definizione di derivata", "Regole di derivazione", "Derivata di funzioni composte", "Derivate di ordine superiore", "Teorema di Rolle", "Teorema di Lagrange", "Teorema di Cauchy", "Regola di De L'Hôpital"] },
+    { "id": "taylor",                "name": "Formula di Taylor",        "order": 6,  "subtopics": ["Polinomio di Taylor", "Resto di Peano", "Resto di Lagrange", "Sviluppi di MacLaurin notevoli", "Applicazioni"] },
+    { "id": "studio_funzione",       "name": "Studio di Funzione",       "order": 7,  "subtopics": ["Dominio", "Simmetrie", "Segno", "Limiti agli estremi", "Derivata prima e monotonia", "Massimi e minimi", "Derivata seconda e concavità", "Flessi", "Asintoti"] },
+    { "id": "integrali_indefiniti",  "name": "Integrali Indefiniti",     "order": 8,  "subtopics": ["Primitiva", "Integrali immediati", "Integrazione per parti", "Integrazione per sostituzione", "Integrali di funzioni razionali"] },
+    { "id": "integrali_definiti",    "name": "Integrali Definiti",       "order": 9,  "subtopics": ["Integrale di Riemann", "Teorema fondamentale del calcolo", "Calcolo di aree", "Calcolo di volumi di rotazione", "Integrali impropri"] },
+    { "id": "serie",                 "name": "Serie Numeriche",          "order": 10, "subtopics": ["Definizione e convergenza", "Serie geometrica", "Serie armonica", "Criteri di convergenza", "Serie a segni alterni", "Convergenza assoluta"] }
   ]
 }

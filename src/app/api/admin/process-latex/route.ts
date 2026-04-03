@@ -44,19 +44,26 @@ CONTESTO:
 
   let prompt: string;
 
+  const COMMON_RULES = `
+REGOLE IMPORTANTI:
+- Scrivi tutto in italiano corretto. I nomi di teoremi, lemmi e risultati devono essere in italiano (es. "teorema di Stokes", "teorema della divergenza", "criterio di Leibniz"), mai in inglese.
+- Nei campi JSON usa SOLO testo semplice italiano e formule LaTeX matematiche. NON usare mai comandi LaTeX di formattazione testo come \\textbf, \\textit, \\emph, \\text{}, \\underline — scrivi solo testo piano.
+- Per le formule usa $...$ per inline e $$...$$ per display.`;
+
   if (docType === "libro_teoria") {
     prompt = `Sei un esperto di ${subjectName} al Politecnico italiano. Ti fornisco il sorgente LaTeX di un capitolo di un libro di testo.
 ${contextBlock}
+${COMMON_RULES}
 
 Analizza il LaTeX e crea lezioni di teoria strutturate. Il LaTeX potrebbe contenere ambienti come \\begin{theorem}, \\begin{definition}, \\begin{example}, \\begin{proof}, ecc.
 
 Per ogni sezione/argomento distinto crea UNA lezione con:
 - topic_id: uno tra ${topicIds.join(", ")}
 - lesson_order: numero progressivo a partire da 1
-- title: titolo chiaro e descrittivo
+- title: titolo chiaro e descrittivo in italiano
 - content_markdown: contenuto completo in Markdown con formule LaTeX ($...$ inline, $$...$$ display). Includi definizioni, teoremi, dimostrazioni, esempi.
-- key_concepts: array di 3-6 concetti chiave
-- mini_quiz: array di 3 domande a scelta multipla: { "question": "...", "options": ["A","B","C","D"], "correct_index": 0 }
+- key_concepts: array di 3-6 concetti chiave in italiano
+- mini_quiz: array di 3 domande a scelta multipla in italiano: { "question": "...", "options": ["A","B","C","D"], "correct_index": 0 }
 
 Rispondi SOLO con un array JSON valido:
 [{ "topic_id":"...", "lesson_order":1, "title":"...", "content_markdown":"...", "key_concepts":["..."], "mini_quiz":[{"question":"...","options":["...","...","...","..."],"correct_index":0}] }]
@@ -68,16 +75,17 @@ ${latexContent}
   } else {
     prompt = `Sei un esperto di ${subjectName} al Politecnico italiano. Ti fornisco il sorgente LaTeX di un documento con esercizi (eserciziario, tema d'esame, o dispensa).
 ${contextBlock}
+${COMMON_RULES}
 
 Analizza il LaTeX e identifica TUTTI gli esercizi con le loro soluzioni. Il LaTeX potrebbe usare ambienti come \\begin{exercise}, \\begin{problem}, \\begin{esercizio}, \\item, oppure sezioni numerate. Cerca anche gli ambienti \\begin{solution}, \\begin{soluzione}, \\begin{svolgimento} per le soluzioni.
 
 Per ogni esercizio:
 - topic_id: uno tra ${topicIds.join(", ")}
 - difficulty: 1 (facile), 2 (medio), 3 (difficile)
-- question_latex: testo completo della domanda in LaTeX pulito (usa $...$ inline, $$...$$ display)
-- solution_latex: soluzione completa passo-passo. Se presente nel LaTeX usala; altrimenti costruiscila tu.
-- hints: array di 2-3 suggerimenti strategici
-- tags: array di sottotemi es. ["integrazione_per_parti", "cambio_variabile"]
+- question_latex: testo completo della domanda. Testo in italiano semplice, formule in LaTeX.
+- solution_latex: soluzione completa passo-passo in italiano. Se presente nel LaTeX usala; altrimenti costruiscila tu.
+- hints: array di 2-3 suggerimenti strategici in italiano
+- tags: array di 2-5 micro-argomenti in italiano es. ["integrazione per parti", "cambio di variabile", "teorema di Stokes"]
 
 Rispondi SOLO con un array JSON valido:
 [{ "topic_id":"...", "difficulty":2, "question_latex":"...", "solution_latex":"...", "hints":["..."], "tags":["..."] }]
