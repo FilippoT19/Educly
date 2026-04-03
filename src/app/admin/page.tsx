@@ -441,16 +441,37 @@ export default function AdminPage() {
   async function handleExerciseUpload() {
     if (!exFile || !exTitle) return;
     setExStatus("processing"); setExMsg("");
-    const formData = new FormData();
-    formData.append("file", exFile); formData.append("subject", exSubject);
-    formData.append("source", exSource); formData.append("title", exTitle);
-    formData.append("engineering", exEngineering); formData.append("section", exSection);
-    if (exYear) formData.append("year", exYear);
     try {
-      const res = await fetch("/api/admin/process-exercises", { method: "POST", headers: { "x-admin-secret": secret }, body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setExMsg(`Estratti ${data.extracted} esercizi da "${exTitle}"`);
+      if (exFile.name.endsWith(".tex")) {
+        // Create a source_document first, then process as LaTeX
+        const bookRes = await fetch("/api/admin/books", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-admin-secret": secret },
+          body: JSON.stringify({ title: exTitle, subject: exSubject, doc_type: exSource, engineering: exEngineering, section: exSection }),
+        });
+        const bookData = await bookRes.json();
+        if (!bookRes.ok) throw new Error(bookData.error);
+        setBooks((prev) => [bookData.book, ...prev]);
+        const latexContent = await exFile.text();
+        const res = await fetch("/api/admin/process-latex", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-admin-secret": secret },
+          body: JSON.stringify({ latexContent, sourceDocumentId: bookData.book.id, chapterTitle: exTitle }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setExMsg(`Estratti ${data.extracted} esercizi da "${exTitle}"`);
+      } else {
+        const formData = new FormData();
+        formData.append("file", exFile); formData.append("subject", exSubject);
+        formData.append("source", exSource); formData.append("title", exTitle);
+        formData.append("engineering", exEngineering); formData.append("section", exSection);
+        if (exYear) formData.append("year", exYear);
+        const res = await fetch("/api/admin/process-exercises", { method: "POST", headers: { "x-admin-secret": secret }, body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setExMsg(`Estratti ${data.extracted} esercizi da "${exTitle}"`);
+      }
       setExStatus("done"); setExFile(null); setExTitle(""); setExYear("");
     } catch (err) { setExMsg(err instanceof Error ? err.message : "Errore"); setExStatus("error"); }
   }
@@ -459,15 +480,35 @@ export default function AdminPage() {
   async function handleTheoryUpload() {
     if (!thFile || !thTitle) return;
     setThStatus("processing"); setThMsg("");
-    const formData = new FormData();
-    formData.append("file", thFile); formData.append("subject", thSubject);
-    formData.append("title", thTitle); formData.append("engineering", thEngineering);
-    formData.append("section", thSection);
     try {
-      const res = await fetch("/api/admin/process-theory", { method: "POST", headers: { "x-admin-secret": secret }, body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setThMsg(`Estratte ${data.extracted} lezioni da "${thTitle}"`);
+      if (thFile.name.endsWith(".tex")) {
+        const bookRes = await fetch("/api/admin/books", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-admin-secret": secret },
+          body: JSON.stringify({ title: thTitle, subject: thSubject, doc_type: "libro_teoria", engineering: thEngineering, section: thSection }),
+        });
+        const bookData = await bookRes.json();
+        if (!bookRes.ok) throw new Error(bookData.error);
+        setBooks((prev) => [bookData.book, ...prev]);
+        const latexContent = await thFile.text();
+        const res = await fetch("/api/admin/process-latex", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-admin-secret": secret },
+          body: JSON.stringify({ latexContent, sourceDocumentId: bookData.book.id, chapterTitle: thTitle }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setThMsg(`Estratte ${data.extracted} lezioni da "${thTitle}"`);
+      } else {
+        const formData = new FormData();
+        formData.append("file", thFile); formData.append("subject", thSubject);
+        formData.append("title", thTitle); formData.append("engineering", thEngineering);
+        formData.append("section", thSection);
+        const res = await fetch("/api/admin/process-theory", { method: "POST", headers: { "x-admin-secret": secret }, body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setThMsg(`Estratte ${data.extracted} lezioni da "${thTitle}"`);
+      }
       setThStatus("done"); setThFile(null); setThTitle("");
     } catch (err) { setThMsg(err instanceof Error ? err.message : "Errore"); setThStatus("error"); }
   }
@@ -719,7 +760,7 @@ export default function AdminPage() {
               <p className="text-sm text-muted-foreground mt-0.5">Eserciziarii o temi d&apos;esame non legati a un libro</p>
             </div>
             <div className="bg-card border rounded-2xl p-5 space-y-4">
-              <FilePickerRow file={exFile} onChange={setExFile} />
+              <FilePickerRow file={exFile} onChange={setExFile} accept=".pdf,.tex" />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Materia">
                   <NativeSelect value={exSubject} onChange={setExSubject}
@@ -766,7 +807,7 @@ export default function AdminPage() {
               <p className="text-sm text-muted-foreground mt-0.5">Dispense o capitoli non legati a un libro</p>
             </div>
             <div className="bg-card border rounded-2xl p-5 space-y-4">
-              <FilePickerRow file={thFile} onChange={setThFile} />
+              <FilePickerRow file={thFile} onChange={setThFile} accept=".pdf,.tex" />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Materia">
                   <NativeSelect value={thSubject} onChange={setThSubject}
