@@ -48,8 +48,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { className?: string; 
         <Tldraw
           onMount={(editor: Editor) => {
             editorRef.current = editor;
-            // Start in freehand draw mode
             editor.setCurrentTool("draw");
+            // Force light mode — prevents tldraw from going dark based on system theme
+            editor.user.updateUserPreferences({ colorScheme: "light" });
           }}
         />
       </div>
