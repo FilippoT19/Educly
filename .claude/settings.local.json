@@ -1,8 +1,12 @@
 {
   "permissions": {
+    "ask": [
+      "Bash(git push)",
+      "Bash(git push *)"
+    ],
     "allow": [
-      "Read(//Users/filippotopinelli/Desktop/**)",
       "Bash"
-    ]
+    ],
+    "defaultMode": "acceptEdits"
   }
 }
