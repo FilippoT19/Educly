@@ -81,6 +81,7 @@ export function PracticeSession({
   const [correction, setCorrection] = useState<Correction | null>(null);
   const [canvasSnapshot, setCanvasSnapshot] = useState<string | null>(null);
   const [showHints, setShowHints] = useState(false);
+  const [hintsUsed, setHintsUsed] = useState(false);
   const [error, setError] = useState("");
   const canvasRef = useRef<DrawingCanvasRef>(null);
 
@@ -118,6 +119,7 @@ export function PracticeSession({
     setCorrection(null);
     setCanvasSnapshot(null);
     setShowHints(false);
+    setHintsUsed(false);
     setError("");
     setCanvasFullscreen(false);
 
@@ -169,6 +171,7 @@ export function PracticeSession({
     formData.append("topicName", topic.name);
     formData.append("exerciseText", exercise.text);
     formData.append("difficulty", String(exercise.difficulty));
+    formData.append("hintsUsed", String(hintsUsed));
     formData.append("image", blob, "solution.png");
 
     const res = await fetch("/api/exercise/correct", {
@@ -268,30 +271,40 @@ export function PracticeSession({
               </CardContent>
             </Card>
 
-            {/* Hints */}
+            {/* Hints — clicking penalizes max score */}
             {exercise.hints.length > 0 && (
-              <button
-                onClick={() => setShowHints(!showHints)}
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Lightbulb className="h-4 w-4" />
-                {showHints ? "Nascondi suggerimenti" : "Mostra suggerimenti"}
-                {showHints ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              </button>
-            )}
-            {showHints && (
-              <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800">
-                <CardContent className="pt-4">
-                  <ul className="space-y-1">
-                    {exercise.hints.map((h, i) => (
-                      <li key={i} className="text-sm flex gap-2">
-                        <span className="text-amber-600 font-medium">{i + 1}.</span>
-                        <MathText text={h} />
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+              <div className="space-y-2">
+                {!showHints ? (
+                  <button
+                    onClick={() => { setShowHints(true); setHintsUsed(true); }}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-amber-600 transition-colors"
+                  >
+                    <Lightbulb className="h-4 w-4" />
+                    Mostra suggerimenti
+                    <span className="text-xs text-red-400 font-medium">(max 70 pt)</span>
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="flex items-center gap-2 text-sm text-amber-600 font-medium">
+                      <Lightbulb className="h-4 w-4" />
+                      Suggerimenti
+                      <span className="text-xs text-red-400">(punteggio max: 70)</span>
+                    </p>
+                    <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800">
+                      <CardContent className="pt-4">
+                        <ul className="space-y-1">
+                          {exercise.hints.map((h, i) => (
+                            <li key={i} className="text-sm flex gap-2">
+                              <span className="text-amber-600 font-medium">{i + 1}.</span>
+                              <MathText text={h} />
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+              </div>
             )}
 
             <Separator />
@@ -416,7 +429,7 @@ export function PracticeSession({
                     {correction.whatToReview.map((item) => (
                       <li key={item} className="text-sm flex gap-2">
                         <span className="text-muted-foreground">•</span>
-                        {item}
+                        <MathText text={item} />
                       </li>
                     ))}
                   </ul>
@@ -514,23 +527,30 @@ export function PracticeSession({
                 {exercise.hints.length > 0 && (
                   <>
                     <Separator />
-                    <button
-                      onClick={() => setShowHints(!showHints)}
-                      className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <Lightbulb className="h-3.5 w-3.5" />
-                      {showHints ? "Nascondi suggerimenti" : "Mostra suggerimenti"}
-                      {showHints ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                    </button>
-                    {showHints && (
-                      <ul className="space-y-1">
-                        {exercise.hints.map((h, i) => (
-                          <li key={i} className="text-xs flex gap-2 text-muted-foreground">
-                            <span className="text-amber-600 font-medium shrink-0">{i + 1}.</span>
-                            <MathText text={h} />
-                          </li>
-                        ))}
-                      </ul>
+                    {!showHints ? (
+                      <button
+                        onClick={() => { setShowHints(true); setHintsUsed(true); }}
+                        className="flex items-center gap-2 text-xs text-muted-foreground hover:text-amber-600 transition-colors"
+                      >
+                        <Lightbulb className="h-3.5 w-3.5" />
+                        Mostra suggerimenti
+                        <span className="text-xs text-red-400 font-medium">(max 70 pt)</span>
+                      </button>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="flex items-center gap-1.5 text-xs text-amber-600 font-medium">
+                          <Lightbulb className="h-3.5 w-3.5" />
+                          Suggerimenti <span className="text-red-400">(max 70 pt)</span>
+                        </p>
+                        <ul className="space-y-1">
+                          {exercise.hints.map((h, i) => (
+                            <li key={i} className="text-xs flex gap-2 text-muted-foreground">
+                              <span className="text-amber-600 font-medium shrink-0">{i + 1}.</span>
+                              <MathText text={h} />
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
                   </>
                 )}

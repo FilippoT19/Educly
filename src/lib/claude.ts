@@ -90,38 +90,69 @@ export async function correctExercise(
   topicName: string,
   exerciseText: string,
   imageBase64: string,
-  imageMediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp"
+  imageMediaType: "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+  hintsUsed: boolean = false
 ): Promise<CorrectionResult> {
-  const prompt = `Sei un professore di ${subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2"} al Politecnico italiano.
+  const maxScore = hintsUsed ? 70 : 100;
+
+  const prompt = `Sei un professore severo di ${subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2"} al Politecnico italiano.
 
 Stai correggendo la soluzione di uno studente per il seguente esercizio:
 
 ESERCIZIO:
 ${exerciseText}
 
-Nell'immagine allegata c'è la soluzione scritta a mano dallo studente (scritta con Apple Pencil su GoodNotes o simili).
+Nell'immagine allegata c'è la soluzione scritta a mano dallo studente.
+${hintsUsed ? "\nATTENZIONE: Lo studente ha usato i suggerimenti. Il punteggio massimo assegnabile è 70." : ""}
 
-Analizza attentamente la soluzione e rispondi SOLO in formato JSON valido con questa struttura:
+Analizza la soluzione valutando SEPARATAMENTE questi tre aspetti:
+1. IMPOSTAZIONE (25 pt): ha impostato correttamente il problema? Ha identificato il metodo giusto?
+2. PROCEDIMENTO (50 pt): ha eseguito i passaggi in modo corretto? Il procedimento è logico e completo?
+3. RISULTATO FINALE (25 pt): il risultato finale è corretto?
+
+IMPORTANTE per il punteggio:
+- Un'impostazione corretta da sola non vale più di 25 punti
+- Se il procedimento è sbagliato, il punteggio NON può superare 40 anche se l'impostazione è corretta
+- Se il risultato finale è sbagliato, il punteggio NON può superare 70
+- isCorrect = true SOLO se score >= 85
+${hintsUsed ? "- Il punteggio massimo finale è 70 (suggerimenti usati)" : ""}
+
+Rispondi SOLO in formato JSON valido con questa struttura:
 {
   "isCorrect": true/false,
-  "score": numero da 0 a 100,
-  "errorTypes": ["tipo di errore 1", "tipo di errore 2"],
+  "score": numero da 0 a ${maxScore},
+  "errorTypes": ["tipo di errore in italiano semplice, NO LaTeX, NO markdown"],
   "steps": [
     {
       "step": 1,
-      "label": "nome del passaggio (es. Impostazione, Calcolo derivata, Risultato finale)",
+      "label": "Impostazione",
       "correct": true/false,
-      "comment": "spiegazione breve del passaggio usando LaTeX per le formule, es: Corretto: $\\\\frac{d}{dx}x^2 = 2x$. Oppure: Errore: hai scritto $x^3$ invece di $x^2$."
+      "comment": "spiegazione con LaTeX per le formule: $\\\\frac{d}{dx}x^2 = 2x$"
+    },
+    {
+      "step": 2,
+      "label": "Procedimento",
+      "correct": true/false,
+      "comment": "descrivi gli errori specifici nel procedimento con formule LaTeX"
+    },
+    {
+      "step": 3,
+      "label": "Risultato finale",
+      "correct": true/false,
+      "comment": "il risultato ottenuto vs il risultato corretto in LaTeX"
     }
   ],
-  "solutionLatex": "soluzione corretta completa passo-passo in LaTeX, usa $...$ per inline e $$...$$ per display",
-  "whatToReview": ["argomento da ripassare 1", "argomento da ripassare 2"]
+  "solutionLatex": "soluzione corretta completa passo-passo, usa $...$ per inline e $$...$$ per display",
+  "whatToReview": ["argomento da ripassare in testo semplice italiano, NO LaTeX"]
 }
 
-Regole:
-- Usa SEMPRE LaTeX per le formule matematiche nei campi comment e solutionLatex (es. $x^2$, $\\\\int_0^1$, $\\\\frac{a}{b}$)
-- Per errorTypes usa: "errore di calcolo", "errore di segno", "passaggio mancante", "formula sbagliata", "impostazione errata", "errore di integrazione", "errore di derivazione"
-- Sii preciso e costruttivo. Se corretto, confermalo con entusiasmo.`;
+Regole di formato:
+- Usa LaTeX ($...$) SOLO nei campi comment e solutionLatex, mai in errorTypes o whatToReview
+- Non usare mai \\\\mathbf, \\\\textbf, \\\\textit, né markdown (**testo**)
+- Per errorTypes usa etichette brevi: "errore di calcolo", "errore di segno", "passaggio mancante", "formula sbagliata", "impostazione errata", "errore di procedimento", "risultato errato"
+- whatToReview: testo semplice italiano, es. "Regola di integrazione per parti"`;
+
+
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",

@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
   const topicName = formData.get("topicName") as string;
   const exerciseText = formData.get("exerciseText") as string;
   const difficulty = parseInt(formData.get("difficulty") as string);
+  const hintsUsed = formData.get("hintsUsed") === "true";
   const imageFile = formData.get("image") as File;
 
   if (!imageFile) {
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
   const imageUrl = uploadData?.path || null;
 
   try {
-    const correction = await correctExercise(subject, topicName, exerciseText, base64, mediaType);
+    const correction = await correctExercise(subject, topicName, exerciseText, base64, mediaType, hintsUsed);
 
     // Save to exercise log
     await supabase.from("exercise_log").insert({
