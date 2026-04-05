@@ -15,12 +15,7 @@ import {
   XCircle,
   Lightbulb,
   BookOpen,
-  ChevronDown,
-  ChevronUp,
-  Maximize2,
-  Minimize2,
   Send,
-  X,
 } from "lucide-react";
 
 interface Topic {
@@ -84,30 +79,13 @@ export function PracticeSession({
   const [hintsUsed, setHintsUsed] = useState(false);
   const [error, setError] = useState("");
   const canvasRef = useRef<DrawingCanvasRef>(null);
-
   const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
-
-  // Fullscreen canvas state
-  const [canvasFullscreen, setCanvasFullscreen] = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  // Lock body scroll in fullscreen
-  useEffect(() => {
-    if (canvasFullscreen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-      setDrawerOpen(false);
-    }
-    return () => { document.body.style.overflow = ""; };
-  }, [canvasFullscreen]);
 
   const successRate =
     stats && stats.exercises_done > 0
       ? Math.round((stats.correct / stats.exercises_done) * 100)
       : null;
 
-  // Auto-load if a specific exercise was requested
   useEffect(() => {
     if (initialExerciseId) loadExercise(initialExerciseId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -121,7 +99,6 @@ export function PracticeSession({
     setShowHints(false);
     setHintsUsed(false);
     setError("");
-    setCanvasFullscreen(false);
 
     const res = await fetch("/api/exercise/generate", {
       method: "POST",
@@ -152,7 +129,6 @@ export function PracticeSession({
 
     setError("");
     setPhase("correcting");
-    setCanvasFullscreen(false);
 
     const blob = await canvasRef.current.exportPng();
     if (!blob) {
@@ -189,7 +165,6 @@ export function PracticeSession({
     setCorrection(data);
     setPhase("feedback");
 
-    // Record the attempt
     if (currentExerciseId) {
       fetch("/api/exercise/attempts", {
         method: "POST",
@@ -253,7 +228,7 @@ export function PracticeSession({
           </div>
         )}
 
-        {/* EXERCISE + CANVAS (normal view) */}
+        {/* SOLVING */}
         {(phase === "solving" || phase === "correcting") && exercise && (
           <>
             {/* Exercise text */}
@@ -271,9 +246,9 @@ export function PracticeSession({
               </CardContent>
             </Card>
 
-            {/* Hints — clicking penalizes max score */}
+            {/* Hints */}
             {exercise.hints.length > 0 && (
-              <div className="space-y-2">
+              <div>
                 {!showHints ? (
                   <button
                     onClick={() => { setShowHints(true); setHintsUsed(true); }}
@@ -309,42 +284,30 @@ export function PracticeSession({
 
             <Separator />
 
-            {/* Canvas placeholder — tap to open fullscreen */}
+            {/* Canvas — always visible, no fullscreen overlay */}
             <div className="space-y-2">
               <p className="text-sm font-medium">La tua soluzione</p>
-              <button
-                onClick={() => setCanvasFullscreen(true)}
-                className="w-full h-32 rounded-xl border-2 border-dashed border-muted hover:border-primary/50 hover:bg-muted/20 transition-colors flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-foreground"
-              >
-                <Maximize2 className="h-6 w-6" />
-                <span className="text-sm font-medium">Tocca per aprire il foglio</span>
-                <span className="text-xs">Apple Pencil · Schermo intero</span>
-              </button>
+              <DrawingCanvas
+                ref={canvasRef}
+                className="w-full rounded-xl border overflow-hidden"
+              />
             </div>
 
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
 
             <Button
               size="lg"
-              className="w-full"
+              className="w-full gap-2"
               onClick={submitSolution}
               disabled={phase === "correcting"}
             >
               {phase === "correcting" ? (
-                <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Correzione in corso...</>
+                <><RefreshCw className="h-4 w-4 animate-spin" /> Correzione in corso...</>
               ) : (
-                "Invia per correzione"
+                <><Send className="h-4 w-4" /> Invia per correzione</>
               )}
             </Button>
           </>
-        )}
-
-        {/* CORRECTING (no exercise shown, canvas gone) */}
-        {phase === "correcting" && !exercise && (
-          <div className="flex flex-col items-center justify-center flex-1 gap-3">
-            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="text-muted-foreground">Correzione in corso...</p>
-          </div>
         )}
 
         {/* FEEDBACK */}
@@ -458,117 +421,6 @@ export function PracticeSession({
             </Button>
           </>
         )}
-      </div>
-
-      {/* ── FULLSCREEN CANVAS OVERLAY ── always mounted to preserve strokes */}
-      <div
-        className="fixed inset-0 z-50 bg-background flex flex-col"
-        style={{ display: canvasFullscreen && exercise ? "flex" : "none" }}
-      >
-        {exercise && (<>
-
-          {/* Top bar */}
-          <div className="flex items-center gap-2 px-3 pt-3 pb-2 shrink-0">
-            {/* Exercise drawer toggle */}
-            <button
-              onClick={() => setDrawerOpen(!drawerOpen)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 transition-colors text-sm font-medium"
-            >
-              <BookOpen className="h-3.5 w-3.5" />
-              Esercizio
-              {drawerOpen
-                ? <ChevronUp className="h-3 w-3" />
-                : <ChevronDown className="h-3 w-3" />
-              }
-            </button>
-
-            <div className="flex-1" />
-
-            {/* Submit button */}
-            <button
-              onClick={submitSolution}
-              disabled={phase === "correcting"}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-white text-sm font-medium disabled:opacity-50 hover:bg-primary/90 transition-colors"
-            >
-              <Send className="h-3.5 w-3.5" />
-              Invia
-            </button>
-
-            {/* Close fullscreen */}
-            <button
-              onClick={() => setCanvasFullscreen(false)}
-              className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-muted transition-colors"
-            >
-              <Minimize2 className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Exercise drawer — slides down from top */}
-          <div
-            className={`overflow-hidden transition-all duration-300 shrink-0 ${
-              drawerOpen ? "max-h-[45vh]" : "max-h-0"
-            }`}
-          >
-            <div className="mx-3 mb-2 rounded-xl border bg-card shadow-sm overflow-y-auto max-h-[43vh]">
-              <div className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold text-sm">Esercizio</p>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className={DIFFICULTY_COLORS[exercise.difficulty]}>
-                      {DIFFICULTY_LABELS[exercise.difficulty]}
-                    </Badge>
-                    <button onClick={() => setDrawerOpen(false)}>
-                      <X className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                  </div>
-                </div>
-                <MathText text={exercise.text} className="text-sm leading-relaxed" />
-
-                {exercise.hints.length > 0 && (
-                  <>
-                    <Separator />
-                    {!showHints ? (
-                      <button
-                        onClick={() => { setShowHints(true); setHintsUsed(true); }}
-                        className="flex items-center gap-2 text-xs text-muted-foreground hover:text-amber-600 transition-colors"
-                      >
-                        <Lightbulb className="h-3.5 w-3.5" />
-                        Mostra suggerimenti
-                        <span className="text-xs text-red-400 font-medium">(max 70 pt)</span>
-                      </button>
-                    ) : (
-                      <div className="space-y-1">
-                        <p className="flex items-center gap-1.5 text-xs text-amber-600 font-medium">
-                          <Lightbulb className="h-3.5 w-3.5" />
-                          Suggerimenti <span className="text-red-400">(max 70 pt)</span>
-                        </p>
-                        <ul className="space-y-1">
-                          {exercise.hints.map((h, i) => (
-                            <li key={i} className="text-xs flex gap-2 text-muted-foreground">
-                              <span className="text-amber-600 font-medium shrink-0">{i + 1}.</span>
-                              <MathText text={h} />
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {error && <p className="text-xs text-destructive">{error}</p>}
-              </div>
-            </div>
-          </div>
-
-          {/* Canvas — fills remaining space */}
-          <div className="flex-1 min-h-0 px-3 pb-3">
-            <DrawingCanvas
-              ref={canvasRef}
-              className="w-full h-full rounded-xl border"
-              fillHeight
-            />
-          </div>
-        </>)}
       </div>
     </div>
   );
