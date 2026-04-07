@@ -16,6 +16,7 @@ import {
   Lightbulb,
   BookOpen,
   Send,
+  Target,
 } from "lucide-react";
 
 interface Topic {
@@ -80,6 +81,9 @@ export function PracticeSession({
   const [error, setError] = useState("");
   const canvasRef = useRef<DrawingCanvasRef>(null);
   const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
+  const [recommendation, setRecommendation] = useState<{
+    exerciseId: string; topicId: string; reason: string;
+  } | null>(null);
 
   const successRate =
     stats && stats.exercises_done > 0
@@ -99,6 +103,7 @@ export function PracticeSession({
     setShowHints(false);
     setHintsUsed(false);
     setError("");
+    setRecommendation(null);
 
     const res = await fetch("/api/exercise/generate", {
       method: "POST",
@@ -176,6 +181,17 @@ export function PracticeSession({
         }),
       }).catch(() => {});
     }
+
+    // Fetch recommendation based on this result
+    const recUrl = new URL("/api/exercise/recommend", window.location.origin);
+    recUrl.searchParams.set("subject", subject);
+    recUrl.searchParams.set("topicId", topic.id);
+    recUrl.searchParams.set("score", String(data.score));
+    if (currentExerciseId) recUrl.searchParams.set("currentExerciseId", currentExerciseId);
+    fetch(recUrl.toString())
+      .then(r => r.json())
+      .then(r => { if (r.recommendation) setRecommendation(r.recommendation); })
+      .catch(() => {});
   }
 
   return (
@@ -416,9 +432,39 @@ export function PracticeSession({
               </Card>
             )}
 
-            <Button size="lg" className="w-full" onClick={() => loadExercise()}>
-              Prossimo esercizio
-            </Button>
+            {/* Recommendation */}
+            {recommendation ? (
+              <Card className="border-violet-200 bg-violet-50 dark:bg-violet-950 dark:border-violet-800">
+                <CardContent className="pt-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Target className="h-5 w-5 text-violet-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-violet-800 dark:text-violet-200 mb-1">
+                        Consigliato per te
+                      </p>
+                      <p className="text-sm text-violet-700 dark:text-violet-300">
+                        {recommendation.reason}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1 bg-violet-600 hover:bg-violet-700 text-white"
+                      onClick={() => loadExercise(recommendation.exerciseId)}
+                    >
+                      Fai questo esercizio
+                    </Button>
+                    <Button variant="outline" onClick={() => loadExercise()}>
+                      Casuale
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Button size="lg" className="w-full" onClick={() => loadExercise()}>
+                Prossimo esercizio
+              </Button>
+            )}
           </>
         )}
       </div>
