@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GuestButton } from "@/components/GuestButton";
 
 export default function Home() {
   return (
@@ -9,20 +10,18 @@ export default function Home() {
           Allenati con esercizi di Analisi 1 e 2 corretti dall&apos;intelligenza artificiale.
           Scopri dove sbagli, migliora argomento per argomento.
         </p>
-        <div className="flex gap-3 justify-center">
-          <Link
-            href="/signup"
-            className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-5 h-9 text-sm font-medium transition-colors hover:opacity-90"
-          >
-            Inizia gratis
-          </Link>
+        <div className="flex gap-3 justify-center flex-wrap">
           <Link
             href="/login"
-            className="inline-flex items-center justify-center rounded-lg border border-border bg-background px-5 h-9 text-sm font-medium transition-colors hover:bg-muted"
+            className="inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground px-5 h-9 text-sm font-medium transition-colors hover:opacity-90"
           >
             Accedi
           </Link>
+          <GuestButton />
         </div>
+        <p className="text-xs text-muted-foreground mt-4">
+          Ospite — Ing. Fisica, 2° anno · visualizzazione esercizi senza correzione AI
+        </p>
       </div>
     </main>
   );

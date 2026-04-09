@@ -161,7 +161,8 @@ export function PracticeSession({
     });
 
     if (!res.ok) {
-      setError("Errore nella correzione. Riprova.");
+      const errData = await res.json().catch(() => ({}));
+      setError(errData.error ?? "Errore nella correzione. Riprova.");
       setPhase("solving");
       return;
     }

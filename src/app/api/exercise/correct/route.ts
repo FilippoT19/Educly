@@ -11,6 +11,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
+  // Block guest account
+  if (user.email === process.env.GUEST_EMAIL) {
+    return NextResponse.json(
+      { error: "Questa funzione non è disponibile per i guest." },
+      { status: 403 }
+    );
+  }
+
   // 10 corrections per hour per user (each call costs ~$0.01 in Claude API)
   if (isRateLimited(`correct:${user.id}`, 10, 60 * 60 * 1000)) {
     return NextResponse.json({ error: "Limite correzioni raggiunto. Riprova tra un po'." }, { status: 429 });

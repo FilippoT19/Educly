@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Upload, CheckCircle, AlertCircle, Loader2,
   BookOpen, PenLine, Eye, Pencil, Trash2, Save, X, Plus,
-  Library, ChevronRight, ArrowLeft, BookMarked, FolderOpen,
+  Library, ChevronRight, ArrowLeft, BookMarked, FolderOpen, UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MathText } from "@/components/MathText";
@@ -262,7 +262,7 @@ export default function AdminPage() {
   const [authLoading, setAuthLoading] = useState(false);
 
   // ── Nav ────────────────────────────────────────────────────────────────────
-  type Page = "library" | "exercises" | "theory" | "review";
+  type Page = "library" | "exercises" | "theory" | "review" | "users";
   const [page, setPage] = useState<Page>("library");
 
   // ── Library ────────────────────────────────────────────────────────────────
@@ -313,6 +313,33 @@ export default function AdminPage() {
   const [reviewSubject, setReviewSubject] = useState("analisi1");
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loadingReview, setLoadingReview] = useState(false);
+
+  // ── Users tab ──────────────────────────────────────────────────────────────
+  const [newUserName, setNewUserName]       = useState("");
+  const [newUserEmail, setNewUserEmail]     = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserCourse, setNewUserCourse]   = useState("Ingegneria Fisica");
+  const [newUserYear, setNewUserYear]       = useState("1");
+  const [userStatus, setUserStatus]         = useState<Status>("idle");
+  const [userMsg, setUserMsg]               = useState("");
+
+  async function createUser() {
+    if (!newUserName || !newUserEmail || !newUserPassword) return;
+    setUserStatus("processing"); setUserMsg("");
+    const res = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-secret": secret },
+      body: JSON.stringify({
+        fullName: newUserName, email: newUserEmail, password: newUserPassword,
+        course: newUserCourse, year: parseInt(newUserYear),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setUserStatus("error"); setUserMsg(data.error || "Errore"); return; }
+    setUserStatus("done");
+    setUserMsg(`Account creato: ${newUserEmail}`);
+    setNewUserName(""); setNewUserEmail(""); setNewUserPassword("");
+  }
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   async function handleLogin() {
@@ -558,6 +585,7 @@ export default function AdminPage() {
     { id: "exercises", label: "Esercizi", icon: <PenLine className="h-4 w-4" /> },
     { id: "theory", label: "Teoria", icon: <BookOpen className="h-4 w-4" /> },
     { id: "review", label: "Rivedi", icon: <Eye className="h-4 w-4" /> },
+    { id: "users", label: "Utenti", icon: <UserPlus className="h-4 w-4" /> },
   ];
 
   return (
@@ -870,6 +898,40 @@ export default function AdminPage() {
                 </p>
               )
             )}
+          </div>
+        )}
+        {/* ── USERS ── */}
+        {page === "users" && (
+          <div className="max-w-md space-y-6">
+            <div>
+              <h1 className="text-xl font-bold">Crea account</h1>
+              <p className="text-sm text-muted-foreground mt-0.5">Aggiungi un nuovo studente alla piattaforma</p>
+            </div>
+            <div className="bg-card border rounded-2xl p-6 space-y-4">
+              <Field label="Nome e cognome">
+                <Input value={newUserName} onChange={e => setNewUserName(e.target.value)} placeholder="Mario Rossi" />
+              </Field>
+              <Field label="Email">
+                <Input type="email" value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} placeholder="mario@polimi.it" />
+              </Field>
+              <Field label="Password">
+                <Input type="password" value={newUserPassword} onChange={e => setNewUserPassword(e.target.value)} placeholder="Almeno 8 caratteri" minLength={8} />
+              </Field>
+              <Field label="Corso di laurea">
+                <NativeSelect value={newUserCourse} onChange={setNewUserCourse}
+                  options={ENGINEERING_OPTIONS.filter(o => o !== "tutti").map(o => ({ id: o, name: o }))} />
+              </Field>
+              <Field label="Anno">
+                <NativeSelect value={newUserYear} onChange={setNewUserYear}
+                  options={[1,2,3,4,5].map(y => ({ id: String(y), name: `${y}° anno` }))} />
+              </Field>
+              {userStatus === "done"  && <p className="text-sm text-green-600">{userMsg}</p>}
+              {userStatus === "error" && <p className="text-sm text-destructive">{userMsg}</p>}
+              <Button className="w-full" onClick={createUser}
+                disabled={!newUserName || !newUserEmail || !newUserPassword || userStatus === "processing"}>
+                {userStatus === "processing" ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Creazione…</> : "Crea account"}
+              </Button>
+            </div>
           </div>
         )}
       </div>

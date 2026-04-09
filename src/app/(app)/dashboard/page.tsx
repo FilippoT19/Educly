@@ -44,9 +44,10 @@ export default async function DashboardPage() {
     return c?.topics.find((t) => t.id === topicId)?.name || topicId;
   }
 
+  const isGuest = user?.email === process.env.GUEST_EMAIL;
   const AVAILABLE_COURSES = [
-    { id: "analisi1", name: "Analisi 1" },
-    { id: "analisi2", name: "Analisi 2" },
+    { id: "analisi1", name: "Analisi 1", disabled: isGuest },
+    { id: "analisi2", name: "Analisi 2", disabled: false },
   ];
 
   const firstName = student?.full_name?.split(" ")[0];
@@ -93,13 +94,27 @@ export default async function DashboardPage() {
           </h2>
           <Card>
             <CardContent className="py-0 divide-y divide-border">
-              {AVAILABLE_COURSES.map(({ id, name }) => {
+              {AVAILABLE_COURSES.map(({ id, name, disabled }) => {
                 const courseStats = stats.filter((s) => s.subject === id);
                 const done = courseStats.reduce((s, r) => s + r.exercises_done, 0);
                 const correct = courseStats.reduce((s, r) => s + r.correct, 0);
                 const rate = done > 0 ? Math.round((correct / done) * 100) : 0;
                 const topicsStarted = courseStats.filter((s) => s.exercises_done > 0).length;
                 const totalTopics = curricula.find((c) => c.id === id)?.topics.length || 0;
+
+                if (disabled) {
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center gap-3 py-3.5 -mx-4 px-4 opacity-40 cursor-not-allowed first:rounded-t-xl last:rounded-b-xl"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-[14px]">{name}</p>
+                        <p className="text-[12px] text-muted-foreground mt-0.5">Non disponibile in modalità ospite</p>
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <Link
