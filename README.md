@@ -20,7 +20,7 @@ just whether you got it right.
 - Supabase
 
 ## Live demo
-educly.vercel.app — guest access available
+[educly.vercel.app](https://educly.vercel.app/) — guest access available
 
 ## Run locally
 1. Clone the repo
