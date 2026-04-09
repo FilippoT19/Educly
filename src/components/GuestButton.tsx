@@ -10,20 +10,21 @@ export function GuestButton() {
   const [error, setError] = useState("");
 
   async function handleClick() {
+    const email    = process.env.NEXT_PUBLIC_GUEST_EMAIL;
+    const password = process.env.NEXT_PUBLIC_GUEST_PASSWORD;
+    if (!email || !password) {
+      setError("Account ospite non configurato.");
+      return;
+    }
     setLoading(true);
     setError("");
-    const res = await fetch("/api/auth/guest", { method: "POST" });
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error ?? "Errore nel login guest.");
+    const supabase = createClient();
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+    if (err) {
+      setError("Account ospite non disponibile al momento.");
       setLoading(false);
       return;
     }
-    const supabase = createClient();
-    await supabase.auth.setSession({
-      access_token:  json.access_token,
-      refresh_token: json.refresh_token,
-    });
     router.push("/dashboard");
     router.refresh();
   }
