@@ -1,30 +1,28 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Educly
 
-## Getting Started
+An AI-powered study app for STEM university students. 
+Built for students at Politecnico di Milano.
 
-First, run the development server:
+## The problem
+Most study tools help you find answers. Educly focuses on 
+the reasoning process — extracting exercises from real 
+textbooks and giving feedback on *how* you solve, not 
+just whether you got it right.
 
-```bash
-npm run dev
-```
+## Features
+- Exercise extraction from scanned PDF textbooks
+- AI-powered feedback on problem-solving process
+- [add any other real features you have]
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tech stack
+- Next.js, TypeScript
+- Claude API (Anthropic)
+- Supabase
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Live demo
+[educly.vercel.app] — guest access available
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Run locally
+1. Clone the repo
+2. Add your `.env` variables (see `.env.example`)
+3. `npm install && npm run dev`
