@@ -12,7 +12,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Block guest account
-  if (user.email === process.env.GUEST_EMAIL) {
+  const guestEmail = process.env.GUEST_EMAIL ?? "guest@educly.app";
+  if (user.email === guestEmail) {
     return NextResponse.json(
       { error: "Questa funzione non è disponibile per i guest." },
       { status: 403 }

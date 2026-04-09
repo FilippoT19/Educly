@@ -44,7 +44,8 @@ export default async function DashboardPage() {
     return c?.topics.find((t) => t.id === topicId)?.name || topicId;
   }
 
-  const isGuest = user?.email === process.env.GUEST_EMAIL;
+  const guestEmail = process.env.GUEST_EMAIL ?? "guest@educly.app";
+  const isGuest = user?.email === guestEmail;
   const AVAILABLE_COURSES = [
     { id: "analisi1", name: "Analisi 1", disabled: isGuest },
     { id: "analisi2", name: "Analisi 2", disabled: false },
