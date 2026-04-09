@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { correctExercise } from "@/lib/claude";
+import { isRateLimited } from "@/lib/rateLimit";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -8,6 +9,11 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+  }
+
+  // 10 corrections per hour per user (each call costs ~$0.01 in Claude API)
+  if (isRateLimited(`correct:${user.id}`, 10, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: "Limite correzioni raggiunto. Riprova tra un po'." }, { status: 429 });
   }
 
   const formData = await request.formData();

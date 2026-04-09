@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateExercise } from "@/lib/claude";
+import { isRateLimited } from "@/lib/rateLimit";
 import analisi1 from "@/content/analisi1.json";
 import analisi2 from "@/content/analisi2.json";
 
@@ -10,6 +11,11 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
+
+  // 30 exercise loads per hour per user (DB lookups are free; only Claude generation is expensive)
+  if (isRateLimited(`gen:${user.id}`, 30, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: "Troppe richieste. Riprova tra un po'." }, { status: 429 });
+  }
 
   const { subject, topicId, exerciseId } = await request.json();
 

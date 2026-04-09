@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -24,6 +25,29 @@ export default function LoginPage() {
     if (error) {
       setError("Email o password non corretti.");
       setLoading(false);
+      return;
+    }
+    router.push("/dashboard");
+    router.refresh();
+  }
+
+  async function handleGuest() {
+    const guestEmail    = process.env.NEXT_PUBLIC_GUEST_EMAIL;
+    const guestPassword = process.env.NEXT_PUBLIC_GUEST_PASSWORD;
+    if (!guestEmail || !guestPassword) {
+      setError("Account demo non configurato.");
+      return;
+    }
+    setError("");
+    setGuestLoading(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: guestEmail,
+      password: guestPassword,
+    });
+    if (error) {
+      setError("Account demo non disponibile al momento.");
+      setGuestLoading(false);
       return;
     }
     router.push("/dashboard");
@@ -74,10 +98,31 @@ export default function LoginPage() {
             <p className="text-[13px] text-destructive">{error}</p>
           )}
 
-          <Button type="submit" className="w-full" size="lg" disabled={loading}>
+          <Button type="submit" className="w-full" size="lg" disabled={loading || guestLoading}>
             {loading ? "Accesso in corso…" : "Accedi"}
           </Button>
         </form>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 my-5">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-[12px] text-muted-foreground">oppure</span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+
+        {/* Guest login */}
+        <Button
+          variant="outline"
+          className="w-full"
+          size="lg"
+          onClick={handleGuest}
+          disabled={loading || guestLoading}
+        >
+          {guestLoading ? "Accesso…" : "Entra come ospite"}
+        </Button>
+        <p className="text-[11px] text-center text-muted-foreground mt-2">
+          Account demo — Ing. Fisica, 2° anno
+        </p>
 
         <p className="text-[13px] text-center text-muted-foreground mt-6">
           Non hai un account?{" "}
