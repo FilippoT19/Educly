@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { MathText } from "@/components/MathText";
-import { DrawingCanvas, DrawingCanvasRef } from "@/components/DrawingCanvas";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +16,7 @@ import {
   BookOpen,
   Send,
   Target,
+  ChevronRight,
 } from "lucide-react";
 
 interface Topic {
@@ -31,9 +31,14 @@ interface TopicStats {
 }
 
 interface Exercise {
+  id?: string;
   text: string;
   difficulty: number;
   hints: string[];
+  answerType?: "exact" | "open";
+  solutionExact?: string | null;
+  solutionSteps?: string[];
+  solution?: string; // solution_latex from DB
 }
 
 interface CorrectionStep {
@@ -50,6 +55,7 @@ interface Correction {
   steps: CorrectionStep[];
   solutionLatex: string;
   whatToReview: string[];
+  solutionSteps?: string[];
 }
 
 type Phase = "idle" | "loading_exercise" | "solving" | "correcting" | "feedback";
@@ -75,15 +81,18 @@ export function PracticeSession({
   const [phase, setPhase] = useState<Phase>("idle");
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [correction, setCorrection] = useState<Correction | null>(null);
-  const [canvasSnapshot, setCanvasSnapshot] = useState<string | null>(null);
+  const [studentAnswer, setStudentAnswer] = useState("");
   const [showHints, setShowHints] = useState(false);
   const [hintsUsed, setHintsUsed] = useState(false);
   const [error, setError] = useState("");
-  const canvasRef = useRef<DrawingCanvasRef>(null);
   const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
   const [recommendation, setRecommendation] = useState<{
     exerciseId: string; topicId: string; reason: string;
   } | null>(null);
+
+  // Interactive step review state
+  const [stepReviewIndex, setStepReviewIndex] = useState<number | null>(null);
+  const [stepResults, setStepResults] = useState<boolean[]>([]);
 
   const successRate =
     stats && stats.exercises_done > 0
@@ -99,11 +108,13 @@ export function PracticeSession({
     setPhase("loading_exercise");
     setExercise(null);
     setCorrection(null);
-    setCanvasSnapshot(null);
+    setStudentAnswer("");
     setShowHints(false);
     setHintsUsed(false);
     setError("");
     setRecommendation(null);
+    setStepReviewIndex(null);
+    setStepResults([]);
 
     const res = await fetch("/api/exercise/generate", {
       method: "POST",
@@ -121,43 +132,35 @@ export function PracticeSession({
     setCurrentExerciseId(data.id ?? null);
     setExercise(data);
     setPhase("solving");
-    setTimeout(() => canvasRef.current?.clear(), 50);
   }
 
   async function submitSolution() {
-    if (!exercise || !canvasRef.current) return;
+    if (!exercise) return;
 
-    if (canvasRef.current.isEmpty()) {
-      setError("Scrivi la soluzione prima di inviare.");
+    if (!studentAnswer.trim()) {
+      setError("Scrivi la tua risposta prima di inviare.");
       return;
     }
 
     setError("");
     setPhase("correcting");
 
-    const blob = await canvasRef.current.exportPng();
-    if (!blob) {
-      setError("Errore nell'esportazione del disegno. Riprova.");
-      setPhase("solving");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (ev) => setCanvasSnapshot(ev.target?.result as string);
-    reader.readAsDataURL(blob);
-
-    const formData = new FormData();
-    formData.append("subject", subject);
-    formData.append("topicId", topic.id);
-    formData.append("topicName", topic.name);
-    formData.append("exerciseText", exercise.text);
-    formData.append("difficulty", String(exercise.difficulty));
-    formData.append("hintsUsed", String(hintsUsed));
-    formData.append("image", blob, "solution.png");
-
     const res = await fetch("/api/exercise/correct", {
       method: "POST",
-      body: formData,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject,
+        topicId: topic.id,
+        topicName: topic.name,
+        exerciseText: exercise.text,
+        difficulty: exercise.difficulty,
+        hintsUsed,
+        studentAnswer: studentAnswer.trim(),
+        answerType: exercise.answerType || "open",
+        solutionExact: exercise.solutionExact || null,
+        solutionLatex: exercise.solution || null,
+        solutionSteps: exercise.solutionSteps || [],
+      }),
     });
 
     if (!res.ok) {
@@ -183,7 +186,7 @@ export function PracticeSession({
       }).catch(() => {});
     }
 
-    // Fetch recommendation based on this result
+    // Fetch recommendation
     const recUrl = new URL("/api/exercise/recommend", window.location.origin);
     recUrl.searchParams.set("subject", subject);
     recUrl.searchParams.set("topicId", topic.id);
@@ -194,6 +197,27 @@ export function PracticeSession({
       .then(r => { if (r.recommendation) setRecommendation(r.recommendation); })
       .catch(() => {});
   }
+
+  function startStepReview() {
+    setStepReviewIndex(0);
+    setStepResults([]);
+  }
+
+  function answerStep(correct: boolean) {
+    const steps = correction?.solutionSteps || [];
+    const newResults = [...stepResults, correct];
+    setStepResults(newResults);
+    if (stepReviewIndex !== null && stepReviewIndex < steps.length - 1) {
+      setStepReviewIndex(stepReviewIndex + 1);
+    } else {
+      setStepReviewIndex(-1); // done
+    }
+  }
+
+  const reviewSteps = correction?.solutionSteps || [];
+  const missedSteps = stepResults
+    .map((ok, i) => (!ok ? i + 1 : null))
+    .filter(Boolean) as number[];
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -301,13 +325,26 @@ export function PracticeSession({
 
             <Separator />
 
-            {/* Canvas — always visible, no fullscreen overlay */}
+            {/* Answer input */}
             <div className="space-y-2">
-              <p className="text-sm font-medium">La tua soluzione</p>
-              <DrawingCanvas
-                ref={canvasRef}
-                className="w-full rounded-xl border overflow-hidden"
+              <p className="text-sm font-medium">La tua risposta</p>
+              <textarea
+                value={studentAnswer}
+                onChange={(e) => setStudentAnswer(e.target.value)}
+                placeholder={
+                  exercise.answerType === "exact"
+                    ? "Scrivi il risultato finale (es: 3/4, π/2, 0)..."
+                    : "Scrivi la tua soluzione passo per passo..."
+                }
+                disabled={phase === "correcting"}
+                rows={exercise.answerType === "exact" ? 2 : 6}
+                className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 resize-none font-mono"
               />
+              {exercise.answerType === "open" && (
+                <p className="text-xs text-muted-foreground">
+                  Puoi usare notazione matematica: es. sqrt(2), pi/4, integral, lim_{"{x→0}"}
+                </p>
+              )}
             </div>
 
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
@@ -330,6 +367,7 @@ export function PracticeSession({
         {/* FEEDBACK */}
         {phase === "feedback" && correction && exercise && (
           <>
+            {/* Result card */}
             <Card className={correction.isCorrect
               ? "border-green-500 bg-green-50 dark:bg-green-950"
               : "border-red-400 bg-red-50 dark:bg-red-950"
@@ -340,7 +378,7 @@ export function PracticeSession({
                 ) : (
                   <XCircle className="h-10 w-10 text-red-500 shrink-0" />
                 )}
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-lg">
                     {correction.isCorrect ? "Corretto!" : "Non ancora..."}
                   </p>
@@ -348,6 +386,16 @@ export function PracticeSession({
                     Punteggio: {correction.score}/100
                   </p>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Your answer */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">La tua risposta</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm font-mono text-muted-foreground whitespace-pre-wrap">{studentAnswer}</p>
               </CardContent>
             </Card>
 
@@ -359,6 +407,7 @@ export function PracticeSession({
               </div>
             )}
 
+            {/* Evaluation steps */}
             {correction.steps && correction.steps.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
@@ -385,6 +434,7 @@ export function PracticeSession({
               </Card>
             )}
 
+            {/* Full solution */}
             {correction.solutionLatex && (
               <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
                 <CardHeader className="pb-2">
@@ -396,6 +446,92 @@ export function PracticeSession({
               </Card>
             )}
 
+            {/* Interactive step review — shown only if wrong and steps exist */}
+            {!correction.isCorrect && reviewSteps.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Trova dove hai sbagliato</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {stepReviewIndex === null ? (
+                    <div className="text-center py-2">
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Rispondi passo per passo per capire dove ti sei fermato.
+                      </p>
+                      <Button variant="outline" onClick={startStepReview} className="gap-2">
+                        <ChevronRight className="h-4 w-4" />
+                        Inizia revisione
+                      </Button>
+                    </div>
+                  ) : stepReviewIndex === -1 ? (
+                    // Review complete
+                    <div className="space-y-3">
+                      {missedSteps.length === 0 ? (
+                        <p className="text-sm text-green-700 dark:text-green-400">
+                          Hai eseguito tutti i passaggi! L&apos;errore potrebbe essere un calcolo o un segno.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium">
+                            Hai saltato o sbagliato {missedSteps.length === 1 ? "il passaggio" : "i passaggi"}:
+                          </p>
+                          <ul className="space-y-1">
+                            {missedSteps.map((i) => (
+                              <li key={i} className="text-sm flex gap-2 items-start">
+                                <XCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                                <MathText text={reviewSteps[i - 1]} className="text-muted-foreground" />
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    // Showing a step
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                        <span>Passo {stepReviewIndex + 1} di {reviewSteps.length}</span>
+                        <div className="flex gap-1">
+                          {reviewSteps.map((_, i) => (
+                            <div
+                              key={i}
+                              className={`w-2 h-2 rounded-full ${
+                                i < stepResults.length
+                                  ? stepResults[i] ? "bg-green-500" : "bg-red-400"
+                                  : i === stepReviewIndex ? "bg-primary" : "bg-muted"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="bg-muted/50 rounded-lg p-4">
+                        <MathText text={reviewSteps[stepReviewIndex]} className="text-sm leading-relaxed" />
+                      </div>
+                      <p className="text-sm text-center text-muted-foreground">
+                        Hai eseguito questo passaggio correttamente?
+                      </p>
+                      <div className="flex gap-3">
+                        <Button
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => answerStep(true)}
+                        >
+                          Sì, l&apos;ho fatto
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          className="flex-1"
+                          onClick={() => answerStep(false)}
+                        >
+                          No, non l&apos;ho fatto
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* What to review */}
             {correction.whatToReview.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
@@ -413,22 +549,6 @@ export function PracticeSession({
                       </li>
                     ))}
                   </ul>
-                </CardContent>
-              </Card>
-            )}
-
-            {canvasSnapshot && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">La tua soluzione</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={canvasSnapshot}
-                    alt="La tua soluzione"
-                    className="w-full object-contain rounded-lg border max-h-64"
-                  />
                 </CardContent>
               </Card>
             )}

@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { correctExercise } from "@/lib/claude";
+import { correctExerciseText } from "@/lib/claude";
 import { isRateLimited } from "@/lib/rateLimit";
+import type { CorrectionResult } from "@/lib/claude";
+
+function normalizeAnswer(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/\\pi/g, "π")
+    .replace(/\bpi\b/g, "π")
+    .replace(/\\infty/g, "∞")
+    .replace(/\binfty\b/g, "∞")
+    .replace(/\\frac\{(\d+)\}\{(\d+)\}/g, "$1/$2");
+}
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -11,7 +24,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Non autorizzato" }, { status: 401 });
   }
 
-  // Block guest account
   const guestEmail = process.env.GUEST_EMAIL ?? "guest@educly.app";
   if (user.email === guestEmail) {
     return NextResponse.json(
@@ -20,39 +32,75 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 10 corrections per hour per user (each call costs ~$0.01 in Claude API)
+  // 10 corrections per hour per user
   if (isRateLimited(`correct:${user.id}`, 10, 60 * 60 * 1000)) {
     return NextResponse.json({ error: "Limite correzioni raggiunto. Riprova tra un po'." }, { status: 429 });
   }
 
-  const formData = await request.formData();
-  const subject = formData.get("subject") as string;
-  const topicId = formData.get("topicId") as string;
-  const topicName = formData.get("topicName") as string;
-  const exerciseText = formData.get("exerciseText") as string;
-  const difficulty = parseInt(formData.get("difficulty") as string);
-  const hintsUsed = formData.get("hintsUsed") === "true";
-  const imageFile = formData.get("image") as File;
+  const body = await request.json();
+  const {
+    subject,
+    topicId,
+    topicName,
+    exerciseText,
+    difficulty,
+    hintsUsed,
+    studentAnswer,
+    answerType,
+    solutionExact,
+    solutionLatex,
+    solutionSteps,
+  } = body as {
+    subject: string;
+    topicId: string;
+    topicName: string;
+    exerciseText: string;
+    difficulty: number;
+    hintsUsed: boolean;
+    studentAnswer: string;
+    answerType: "exact" | "open";
+    solutionExact?: string;
+    solutionLatex?: string;
+    solutionSteps?: string[];
+  };
 
-  if (!imageFile) {
-    return NextResponse.json({ error: "Immagine mancante" }, { status: 400 });
+  if (!studentAnswer?.trim()) {
+    return NextResponse.json({ error: "Risposta mancante" }, { status: 400 });
   }
 
-  // Convert file to base64
-  const arrayBuffer = await imageFile.arrayBuffer();
-  const base64 = Buffer.from(arrayBuffer).toString("base64");
-  const mediaType = imageFile.type as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
-
-  // Upload image to Supabase Storage
-  const filePath = `${user.id}/${Date.now()}.${imageFile.name.split(".").pop()}`;
-  const { data: uploadData } = await supabase.storage
-    .from("solutions")
-    .upload(filePath, imageFile);
-
-  const imageUrl = uploadData?.path || null;
-
   try {
-    const correction = await correctExercise(subject, topicName, exerciseText, base64, mediaType, hintsUsed);
+    let correction: CorrectionResult & { solutionSteps?: string[] };
+
+    if (answerType === "exact" && solutionExact) {
+      // No API call — compare normalized answers
+      const isCorrect = normalizeAnswer(studentAnswer) === normalizeAnswer(solutionExact);
+      const score = isCorrect ? (hintsUsed ? 70 : 100) : 0;
+
+      correction = {
+        isCorrect,
+        score,
+        errorTypes: isCorrect ? [] : ["risposta errata"],
+        steps: [
+          {
+            step: 1,
+            label: "Risultato",
+            correct: isCorrect,
+            comment: isCorrect
+              ? `Corretto! La risposta è $${solutionExact}$.`
+              : `La risposta corretta è $${solutionExact}$, tu hai scritto: ${studentAnswer}`,
+          },
+        ],
+        solutionLatex: solutionLatex || solutionExact,
+        whatToReview: isCorrect ? [] : [topicName],
+        solutionSteps: solutionSteps || [],
+      };
+    } else {
+      // Open-ended: use Claude for grading
+      const result = await correctExerciseText(
+        subject, topicName, exerciseText, studentAnswer, hintsUsed
+      );
+      correction = { ...result, solutionSteps: solutionSteps || [] };
+    }
 
     // Save to exercise log
     await supabase.from("exercise_log").insert({
@@ -61,7 +109,7 @@ export async function POST(request: NextRequest) {
       topic_id: topicId,
       difficulty,
       exercise_text: exerciseText,
-      solution_image_url: imageUrl,
+      student_answer: studentAnswer,
       ai_feedback: correction.solutionLatex,
       error_types: correction.errorTypes,
       is_correct: correction.isCorrect,

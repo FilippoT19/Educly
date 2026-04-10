@@ -35,6 +35,9 @@ export async function POST(request: NextRequest) {
       hints: ex.hints || [],
       source: ex.source,
       fromDb: true,
+      answerType: ex.answer_type || "open",
+      solutionExact: ex.solution_exact || null,
+      solutionSteps: ex.solution_steps || [],
     });
   }
 
@@ -99,6 +102,9 @@ export async function POST(request: NextRequest) {
       hints: picked.hints || [],
       source: picked.source,
       fromDb: true,
+      answerType: picked.answer_type || "open",
+      solutionExact: picked.solution_exact || null,
+      solutionSteps: picked.solution_steps || [],
     });
   }
 
