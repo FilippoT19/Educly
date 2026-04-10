@@ -44,14 +44,14 @@ type Phase =
   | "loading_exercise"
   | "solving"
   | "correcting"
-  | "solution"     // correct answer — shows solution sections
-  | "step_review"  // wrong answer — reviewing steps one by one
-  | "done";        // step review complete
+  | "solution"
+  | "step_review"
+  | "done";
 
 const DIFFICULTY_LABELS = ["", "Facile", "Medio", "Difficile"];
 const DIFFICULTY_COLORS = ["", "text-green-600", "text-yellow-600", "text-red-600"];
 
-// A single step card used in step review
+// One step in the cumulative review list
 function StepCard({
   step,
   verdict,
@@ -68,13 +68,14 @@ function StepCard({
   return (
     <div className={`rounded-xl border transition-colors ${
       verdict === true
-        ? "border-green-300 bg-green-50 dark:bg-green-950 dark:border-green-800"
+        ? "border-green-300 bg-green-50/60 dark:bg-green-950/60 dark:border-green-800"
         : verdict === false
-        ? "border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800"
+        ? "border-red-300 bg-red-50/60 dark:bg-red-950/60 dark:border-red-800"
         : "border-border bg-card"
     }`}>
-      <div className="flex items-start gap-3 px-4 pt-4 pb-3">
-        <div className={`shrink-0 mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+      {/* Header row */}
+      <div className="flex items-start gap-3 px-4 pt-4 pb-2">
+        <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
           verdict === true
             ? "bg-green-600 text-white"
             : verdict === false
@@ -83,80 +84,77 @@ function StepCard({
             ? "bg-primary text-primary-foreground"
             : "bg-muted text-muted-foreground"
         }`}>
-          {verdict === true ? <CheckCircle className="h-4 w-4" /> : verdict === false ? <XCircle className="h-4 w-4" /> : step.step}
+          {verdict === true
+            ? <CheckCircle className="h-3.5 w-3.5" />
+            : verdict === false
+            ? <XCircle className="h-3.5 w-3.5" />
+            : step.step}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm">{step.title}</p>
-          <p className="text-sm text-muted-foreground mt-0.5">{step.text}</p>
+          <p className="font-semibold text-sm leading-snug">{step.title}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{step.text}</p>
         </div>
       </div>
 
-      {/* Formula — always shown */}
+      {/* Formula */}
       {step.formula && (
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-2">
           <MathText text={`$$${step.formula}$$`} className="text-center" />
         </div>
       )}
 
-      {/* Yes/No buttons only for current step */}
+      {/* Yes/No only for current unanswered step */}
       {isCurrent && verdict === null && (
-        <div className="px-4 pb-4 flex gap-3">
-          <Button
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-            onClick={onYes}
-          >
-            Sì, l&apos;ho fatto
-          </Button>
-          <Button variant="destructive" className="flex-1" onClick={onNo}>
-            No, non l&apos;ho fatto
-          </Button>
-        </div>
+        <>
+          <div className="mx-4 mb-3 border-t border-border/60 pt-3">
+            <p className="text-xs text-center text-muted-foreground mb-2.5">
+              Hai eseguito questo passaggio correttamente?
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={onYes}>
+                Sì, l&apos;ho fatto
+              </Button>
+              <Button size="sm" variant="destructive" className="flex-1" onClick={onNo}>
+                No, non l&apos;ho fatto
+              </Button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-// Accordion section for final solution view
-function SolutionAccordion({
-  step,
-  missed,
-}: {
-  step: SolutionStep;
-  missed: boolean;
-}) {
+// Accordion section in final solution view
+function SolutionAccordion({ step, missed }: { step: SolutionStep; missed: boolean }) {
   const [open, setOpen] = useState(false);
 
   return (
     <div className={`rounded-xl border ${missed ? "border-red-300 dark:border-red-800" : "border-border"}`}>
-      {/* Header — always visible */}
-      <div className="px-4 pt-4 pb-3">
-        <div className="flex items-center gap-2 mb-1">
-          {missed ? (
-            <XCircle className="h-4 w-4 text-red-500 shrink-0" />
-          ) : (
-            <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
-          )}
+      <div className="px-4 pt-4 pb-2">
+        <div className="flex items-center gap-2 mb-0.5">
+          {missed
+            ? <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+            : <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />}
           <p className="font-semibold text-sm">{step.title}</p>
         </div>
-        <p className="text-sm text-muted-foreground">{step.text}</p>
+        <p className="text-xs text-muted-foreground leading-snug">{step.text}</p>
       </div>
 
-      {/* Key formula */}
       {step.formula && (
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-2">
           <MathText text={`$$${step.formula}$$`} className="text-center" />
         </div>
       )}
 
-      {/* Expandable detail */}
       {step.detail && (
-        <div className="border-t border-border">
+        <div className="border-t border-border/60">
           <button
             onClick={() => setOpen(!open)}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="w-full flex items-center justify-between px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <span>{open ? "Nascondi dettagli" : "Mostra dettagli"}</span>
-            <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`} />
           </button>
           {open && (
             <div className="px-4 pb-4">
@@ -193,10 +191,8 @@ export function PracticeSession({
   const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
   const [checkResult, setCheckResult] = useState<AnswerCheckResult | null>(null);
 
-  // Step review
   const [stepIndex, setStepIndex] = useState(0);
-  const [stepAnswers, setStepAnswers] = useState<boolean[]>([]); // true=correct, false=missed
-
+  const [stepAnswers, setStepAnswers] = useState<boolean[]>([]);
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [recommendation, setRecommendation] = useState<{
     exerciseId: string; topicId: string; reason: string;
@@ -252,7 +248,6 @@ export function PracticeSession({
       setError("Scrivi la tua risposta prima di inviare.");
       return;
     }
-
     setError("");
     setPhase("correcting");
 
@@ -331,10 +326,7 @@ export function PracticeSession({
     if (stepIndex < steps.length - 1) {
       setStepIndex(stepIndex + 1);
     } else {
-      const earnedWeight = steps.reduce(
-        (sum, s, i) => sum + (newAnswers[i] ? s.weight : 0),
-        0
-      );
+      const earnedWeight = steps.reduce((sum, s, i) => sum + (newAnswers[i] ? s.weight : 0), 0);
       const score = Math.min(earnedWeight, 75);
       setFinalScore(score);
       setPhase("done");
@@ -345,122 +337,169 @@ export function PracticeSession({
 
   const steps: SolutionStep[] = checkResult?.solutionSteps ?? [];
 
-  const NextExerciseBlock = () => (
+  // Partial score visible while reviewing
+  const partialScore = steps.slice(0, stepAnswers.length).reduce(
+    (sum, s, i) => sum + (stepAnswers[i] ? s.weight : 0), 0
+  );
+
+  // ── Shared sidebar blocks ────────────────────────────────────────────────────
+
+  const ScoreCard = ({ score, label, color }: { score: number; label: string; color: "green" | "orange" | "blue" }) => (
+    <Card className={
+      color === "green" ? "border-green-400 bg-green-50 dark:bg-green-950" :
+      color === "orange" ? "border-orange-400 bg-orange-50 dark:bg-orange-950" :
+      "border-border"
+    }>
+      <CardContent className="pt-4 pb-4 text-center">
+        <p className="text-4xl font-bold tracking-tight">{score}</p>
+        <p className="text-xs text-muted-foreground mt-1">{label}</p>
+      </CardContent>
+    </Card>
+  );
+
+  const NextExerciseCard = () => (
     recommendation ? (
       <Card className="border-violet-200 bg-violet-50 dark:bg-violet-950 dark:border-violet-800">
         <CardContent className="pt-4 space-y-3">
-          <div className="flex items-start gap-3">
-            <Target className="h-5 w-5 text-violet-600 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2">
+            <Target className="h-4 w-4 text-violet-600 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-violet-800 dark:text-violet-200 mb-1">
+              <p className="text-xs font-semibold text-violet-800 dark:text-violet-200 mb-1">
                 Consigliato per te
               </p>
-              <p className="text-sm text-violet-700 dark:text-violet-300">{recommendation.reason}</p>
+              <p className="text-xs text-violet-700 dark:text-violet-300 leading-snug">
+                {recommendation.reason}
+              </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-1.5">
             <Button
-              className="flex-1 bg-violet-600 hover:bg-violet-700 text-white"
+              size="sm"
+              className="w-full bg-violet-600 hover:bg-violet-700 text-white"
               onClick={() => loadExercise(recommendation.exerciseId)}
             >
               Fai questo esercizio
             </Button>
-            <Button variant="outline" onClick={() => loadExercise()}>Casuale</Button>
+            <Button size="sm" variant="outline" className="w-full" onClick={() => loadExercise()}>
+              Esercizio casuale
+            </Button>
           </div>
         </CardContent>
       </Card>
     ) : (
-      <Button size="lg" className="w-full" onClick={() => loadExercise()}>
+      <Button className="w-full" onClick={() => loadExercise()}>
         Prossimo esercizio
       </Button>
     )
   );
 
-  return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
-        <Link
-          href={backHref ?? `/course/${subject}`}
-          className="inline-flex items-center justify-center rounded-lg size-8 hover:bg-muted transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div className="flex-1">
-          <p className="text-xs text-muted-foreground">{subjectName}</p>
-          <h1 className="font-semibold leading-tight">{topic.name}</h1>
+  // ── Shared: exercise recap (condensed, shown in left col during feedback) ────
+
+  const ExerciseRecap = () => exercise ? (
+    <div className="rounded-xl border border-border bg-card px-4 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Esercizio</p>
+        <Badge variant="outline" className={`text-[11px] ${DIFFICULTY_COLORS[exercise.difficulty]}`}>
+          {DIFFICULTY_LABELS[exercise.difficulty]}
+        </Badge>
+      </div>
+      <MathText text={exercise.text} className="text-sm leading-relaxed" />
+      {studentAnswer && (
+        <p className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border/60">
+          La tua risposta: <span className="font-mono">{studentAnswer}</span>
+        </p>
+      )}
+    </div>
+  ) : null;
+
+  // ── Layout: header is shared across all phases ───────────────────────────────
+
+  const header = (
+    <header className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
+      <Link
+        href={backHref ?? `/course/${subject}`}
+        className="inline-flex items-center justify-center rounded-lg size-8 hover:bg-muted transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </Link>
+      <div className="flex-1">
+        <p className="text-xs text-muted-foreground">{subjectName}</p>
+        <h1 className="font-semibold leading-tight">{topic.name}</h1>
+      </div>
+      {stats && (
+        <div className="text-right text-sm">
+          <p className="font-medium">{stats.exercises_done} esercizi</p>
+          {successRate !== null && (
+            <p className="text-xs text-muted-foreground">{successRate}% corretti</p>
+          )}
         </div>
-        {stats && (
-          <div className="text-right text-sm">
-            <p className="font-medium">{stats.exercises_done} esercizi</p>
-            {successRate !== null && (
-              <p className="text-xs text-muted-foreground">{successRate}% corretti</p>
-            )}
-          </div>
-        )}
-      </header>
+      )}
+    </header>
+  );
 
-      <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full px-4 py-4 gap-4">
+  // ── IDLE / LOADING / SOLVING / CORRECTING — single centered column ───────────
 
-        {/* IDLE */}
-        {phase === "idle" && (
-          <div className="flex flex-col items-center justify-center flex-1 text-center gap-4">
-            <BookOpen className="h-12 w-12 text-muted-foreground" />
-            <div>
-              <h2 className="text-lg font-semibold mb-1">Pronto ad allenarti?</h2>
-              <p className="text-muted-foreground text-sm">
-                L&apos;AI genererà un esercizio calibrato sul tuo livello
-              </p>
-            </div>
-            <Button size="lg" onClick={() => loadExercise()}>Genera esercizio</Button>
-          </div>
-        )}
+  if (phase === "idle" || phase === "loading_exercise" || phase === "solving" || phase === "correcting") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        {header}
+        <div className="flex-1 flex flex-col max-w-xl mx-auto w-full px-4 py-6 gap-4">
 
-        {/* LOADING */}
-        {phase === "loading_exercise" && (
-          <div className="flex flex-col items-center justify-center flex-1 gap-3">
-            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="text-muted-foreground">Generazione esercizio...</p>
-          </div>
-        )}
-
-        {/* SOLVING */}
-        {(phase === "solving" || phase === "correcting") && exercise && (
-          <>
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Esercizio</CardTitle>
-                  <Badge variant="outline" className={DIFFICULTY_COLORS[exercise.difficulty]}>
-                    {DIFFICULTY_LABELS[exercise.difficulty]}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <MathText text={exercise.text} className="leading-relaxed" />
-              </CardContent>
-            </Card>
-
-            {exercise.hints.length > 0 && (
+          {phase === "idle" && (
+            <div className="flex flex-col items-center justify-center flex-1 text-center gap-4">
+              <BookOpen className="h-12 w-12 text-muted-foreground" />
               <div>
-                {!showHints ? (
-                  <button
-                    onClick={() => { setShowHints(true); setHintsUsed(true); }}
-                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-amber-600 transition-colors"
-                  >
-                    <Lightbulb className="h-4 w-4" />
-                    Mostra suggerimenti
-                    <span className="text-xs text-red-400 font-medium">(max 70 pt)</span>
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="flex items-center gap-2 text-sm text-amber-600 font-medium">
+                <h2 className="text-lg font-semibold mb-1">Pronto ad allenarti?</h2>
+                <p className="text-muted-foreground text-sm">
+                  L&apos;AI genererà un esercizio calibrato sul tuo livello
+                </p>
+              </div>
+              <Button size="lg" onClick={() => loadExercise()}>Genera esercizio</Button>
+            </div>
+          )}
+
+          {phase === "loading_exercise" && (
+            <div className="flex flex-col items-center justify-center flex-1 gap-3">
+              <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+              <p className="text-muted-foreground">Generazione esercizio...</p>
+            </div>
+          )}
+
+          {(phase === "solving" || phase === "correcting") && exercise && (
+            <>
+              <Card>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Esercizio</CardTitle>
+                    <Badge variant="outline" className={DIFFICULTY_COLORS[exercise.difficulty]}>
+                      {DIFFICULTY_LABELS[exercise.difficulty]}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <MathText text={exercise.text} className="leading-relaxed" />
+                </CardContent>
+              </Card>
+
+              {exercise.hints.length > 0 && (
+                <div>
+                  {!showHints ? (
+                    <button
+                      onClick={() => { setShowHints(true); setHintsUsed(true); }}
+                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-amber-600 transition-colors"
+                    >
                       <Lightbulb className="h-4 w-4" />
-                      Suggerimenti
-                      <span className="text-xs text-red-400">(punteggio max: 70)</span>
-                    </p>
+                      Mostra suggerimenti
+                      <span className="text-xs text-red-400 font-medium">(max 70 pt)</span>
+                    </button>
+                  ) : (
                     <Card className="bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800">
                       <CardContent className="pt-4">
+                        <p className="flex items-center gap-2 text-sm text-amber-600 font-medium mb-2">
+                          <Lightbulb className="h-4 w-4" />
+                          Suggerimenti
+                          <span className="text-xs text-red-400">(max: 70 pt)</span>
+                        </p>
                         <ul className="space-y-1">
                           {exercise.hints.map((h, i) => (
                             <li key={i} className="text-sm flex gap-2">
@@ -471,102 +510,79 @@ export function PracticeSession({
                         </ul>
                       </CardContent>
                     </Card>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <Separator />
-
-            {/* Answer input with math keyboard */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Risultato finale</p>
-              <MathKeyboard
-                inputRef={inputRef}
-                value={studentAnswer}
-                onChange={setStudentAnswer}
-              />
-              <input
-                ref={inputRef}
-                type="text"
-                value={studentAnswer}
-                onChange={(e) => setStudentAnswer(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") submitAnswer(); }}
-                placeholder="Es: 3/4, pi/2, sqrt(2), 0, inf..."
-                disabled={phase === "correcting"}
-                className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 font-mono"
-              />
-            </div>
-
-            {error && <p className="text-sm text-destructive text-center">{error}</p>}
-
-            <Button
-              size="lg"
-              className="w-full gap-2"
-              onClick={submitAnswer}
-              disabled={phase === "correcting"}
-            >
-              {phase === "correcting" ? (
-                <><RefreshCw className="h-4 w-4 animate-spin" /> Correzione in corso...</>
-              ) : (
-                <><Send className="h-4 w-4" /> Invia risposta</>
-              )}
-            </Button>
-          </>
-        )}
-
-        {/* SOLUTION — correct answer: shows all sections as accordion */}
-        {phase === "solution" && checkResult && exercise && (
-          <>
-            <Card className="border-green-500 bg-green-50 dark:bg-green-950">
-              <CardContent className="pt-5 flex items-center gap-4">
-                <CheckCircle className="h-10 w-10 text-green-600 shrink-0" />
-                <div>
-                  <p className="font-semibold text-lg">Corretto!</p>
-                  <p className="text-sm text-muted-foreground">
-                    Punteggio: {finalScore}/100
-                    {hintsUsed && " (suggerimenti usati)"}
-                  </p>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
+              )}
 
-            <div>
-              <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
-                Soluzione
-              </p>
+              <Separator />
+
               <div className="space-y-2">
+                <p className="text-sm font-medium">Risultato finale</p>
+                <MathKeyboard inputRef={inputRef} value={studentAnswer} onChange={setStudentAnswer} />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={studentAnswer}
+                  onChange={(e) => setStudentAnswer(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") submitAnswer(); }}
+                  placeholder="Es: 3/4, pi/2, sqrt(2), 0, inf..."
+                  disabled={phase === "correcting"}
+                  className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 font-mono"
+                />
+              </div>
+
+              {error && <p className="text-sm text-destructive text-center">{error}</p>}
+
+              <Button
+                size="lg"
+                className="w-full gap-2"
+                onClick={submitAnswer}
+                disabled={phase === "correcting"}
+              >
+                {phase === "correcting" ? (
+                  <><RefreshCw className="h-4 w-4 animate-spin" /> Correzione in corso...</>
+                ) : (
+                  <><Send className="h-4 w-4" /> Invia risposta</>
+                )}
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── SOLUTION / STEP_REVIEW / DONE — two-column layout ───────────────────────
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      {header}
+
+      <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-6">
+        <div className="grid md:grid-cols-[1fr_260px] gap-6 items-start">
+
+          {/* ── LEFT: main content ───────────────────────────────────────────── */}
+          <div className="space-y-4 min-w-0">
+            <ExerciseRecap />
+
+            {/* SOLUTION */}
+            {phase === "solution" && checkResult && (
+              <div className="space-y-3">
+                <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                  Soluzione
+                </p>
                 {steps.map((s) => (
                   <SolutionAccordion key={s.step} step={s} missed={false} />
                 ))}
               </div>
-            </div>
+            )}
 
-            <NextExerciseBlock />
-          </>
-        )}
-
-        {/* STEP REVIEW — wrong answer: cumulative steps */}
-        {phase === "step_review" && checkResult && exercise && (
-          <>
-            <Card className="border-red-400 bg-red-50 dark:bg-red-950">
-              <CardContent className="pt-5 flex items-center gap-4">
-                <XCircle className="h-10 w-10 text-red-500 shrink-0" />
-                <div>
-                  <p className="font-semibold text-lg">Non ancora...</p>
-                  <p className="text-sm text-muted-foreground">
-                    La risposta corretta è{" "}
-                    <MathText text={checkResult.correctAnswer} className="inline font-medium" />
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div>
-              <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
-                Revisione passaggi — {stepIndex + 1} di {steps.length}
-              </p>
-              <div className="space-y-2">
+            {/* STEP REVIEW */}
+            {phase === "step_review" && checkResult && (
+              <div className="space-y-3">
+                <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                  Revisione passaggi — {stepIndex + 1} di {steps.length}
+                </p>
                 {steps.slice(0, stepIndex + 1).map((s, i) => (
                   <StepCard
                     key={s.step}
@@ -578,47 +594,92 @@ export function PracticeSession({
                   />
                 ))}
               </div>
-            </div>
-          </>
-        )}
+            )}
 
-        {/* DONE — step review complete */}
-        {phase === "done" && checkResult && exercise && (
-          <>
-            <Card className="border-orange-400 bg-orange-50 dark:bg-orange-950">
-              <CardContent className="pt-5 flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-orange-200 dark:bg-orange-800 flex items-center justify-center shrink-0">
-                  <span className="font-bold text-orange-700 dark:text-orange-200 text-sm">
-                    {finalScore}
-                  </span>
-                </div>
-                <div>
-                  <p className="font-semibold text-lg">Revisione completata</p>
-                  <p className="text-sm text-muted-foreground">
-                    Punteggio: {finalScore}/100
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div>
-              <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
-                Soluzione
-              </p>
-              <div className="space-y-2">
+            {/* DONE */}
+            {phase === "done" && checkResult && (
+              <div className="space-y-3">
+                <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                  Soluzione
+                </p>
                 {steps.map((s, i) => (
-                  <SolutionAccordion
-                    key={s.step}
-                    step={s}
-                    missed={stepAnswers[i] === false}
-                  />
+                  <SolutionAccordion key={s.step} step={s} missed={stepAnswers[i] === false} />
                 ))}
               </div>
-            </div>
+            )}
+          </div>
 
-            <NextExerciseBlock />
-          </>
-        )}
+          {/* ── RIGHT: sticky sidebar ────────────────────────────────────────── */}
+          <div className="md:sticky md:top-6 space-y-3">
+
+            {/* SOLUTION sidebar */}
+            {phase === "solution" && (
+              <>
+                <ScoreCard
+                  score={finalScore ?? 100}
+                  label={hintsUsed ? "punti (suggerimenti usati)" : "punti su 100"}
+                  color="green"
+                />
+                <NextExerciseCard />
+              </>
+            )}
+
+            {/* STEP_REVIEW sidebar */}
+            {phase === "step_review" && checkResult && (
+              <>
+                {/* Wrong answer info */}
+                <Card className="border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800">
+                  <CardContent className="pt-4 pb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                      <p className="text-sm font-semibold">Risposta sbagliata</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-1">Risposta corretta:</p>
+                    <MathText text={checkResult.correctAnswer} className="text-sm font-medium" />
+                  </CardContent>
+                </Card>
+
+                {/* Progress bar */}
+                <Card>
+                  <CardContent className="pt-4 pb-4 space-y-2">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Progresso</span>
+                      <span>{stepIndex + 1} / {steps.length}</span>
+                    </div>
+                    <div className="flex gap-1">
+                      {steps.map((_, i) => (
+                        <div
+                          key={i}
+                          className={`h-1.5 flex-1 rounded-full transition-colors ${
+                            i < stepAnswers.length
+                              ? stepAnswers[i] ? "bg-green-500" : "bg-red-400"
+                              : i === stepIndex ? "bg-primary" : "bg-muted"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Punteggio parziale</span>
+                      <span className="font-semibold">{partialScore} / 75</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {/* DONE sidebar */}
+            {phase === "done" && (
+              <>
+                <ScoreCard
+                  score={finalScore ?? 0}
+                  label="punti su 100"
+                  color="orange"
+                />
+                <NextExerciseCard />
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

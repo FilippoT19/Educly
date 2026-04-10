@@ -213,3 +213,10 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+/* ─── KaTeX display math — allow horizontal scroll on long formulas ──────────── */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
