@@ -189,14 +189,16 @@ Regole di formato:
 
 export interface SolutionStep {
   step: number;
-  description: string; // description of this step (LaTeX for formulas)
+  title: string;       // short title, plain text (e.g. "Impostazione dell'integrale")
+  text: string;        // one-sentence explanation, plain text, no LaTeX
+  formula: string;     // key formula for this step in LaTeX (will render as $$...$$)
+  detail: string;      // full explanation with LaTeX (shown in accordion)
   weight: number;      // partial-credit weight (all steps sum to 75)
 }
 
 export interface AnswerCheckResult {
   isCorrect: boolean;
-  correctAnswer: string;   // the correct final answer (LaTeX)
-  fullSolution: string;    // full step-by-step solution (LaTeX)
+  correctAnswer: string;   // the correct final answer (LaTeX inline: $...$)
   solutionSteps: SolutionStep[];
 }
 
@@ -215,35 +217,33 @@ RISPOSTA DELLO STUDENTE:
 ${studentAnswer}
 
 Il tuo compito:
-1. Determina se la risposta dello studente è matematicamente corretta (accetta notazioni equivalenti: π/2 = pi/2 = 1.5708..., √2 = sqrt(2), ecc.)
-2. Scrivi la soluzione completa passo per passo
-3. Suddividi la soluzione in passaggi logici con un peso in punti (i pesi devono sommare esattamente 75, per il credito parziale in caso di risposta sbagliata)
+1. Determina se la risposta dello studente è matematicamente corretta (accetta notazioni equivalenti: π/2 = pi/2, √2 = sqrt(2), ecc.)
+2. Suddividi la soluzione in passaggi logici (da 3 a 6 passaggi)
+3. Per ogni passaggio fornisci: titolo, spiegazione testo, formula chiave, spiegazione dettagliata
+4. I pesi devono sommare esattamente 75
 
 Rispondi SOLO in formato JSON valido:
 {
   "isCorrect": true/false,
-  "correctAnswer": "risposta corretta in LaTeX, es: $\\\\frac{\\\\pi}{4}$",
-  "fullSolution": "soluzione completa passo per passo, usa $...$ per inline e $$...$$ per display",
+  "correctAnswer": "risultato finale in LaTeX inline, es: $\\\\frac{\\\\pi}{4}$",
   "solutionSteps": [
     {
       "step": 1,
-      "description": "descrizione del passaggio con formule LaTeX inline $...$",
-      "weight": 20
-    },
-    {
-      "step": 2,
-      "description": "...",
+      "title": "Titolo del passaggio (testo semplice, NO LaTeX)",
+      "text": "Spiegazione in una frase, testo semplice senza formule.",
+      "formula": "formula principale di questo passaggio in LaTeX puro (senza $ delimitatori), es: \\\\int_0^1 x^2 dx",
+      "detail": "Spiegazione dettagliata con formule $inline$ e $$display$$ LaTeX",
       "weight": 25
     }
   ]
 }
 
-Regole:
-- I pesi in solutionSteps devono sommare esattamente 75
-- Usa da 3 a 6 passaggi logici (non troppo dettagliati, non troppo generici)
-- Le descrizioni dei passaggi devono essere comprensibili da uno studente
-- Non usare markdown (**testo**) nelle descrizioni
-- correctAnswer deve contenere solo il risultato finale, non l'intera soluzione`;
+Regole importanti:
+- title e text: SOLO testo italiano, nessun LaTeX, nessun markdown
+- formula: LaTeX puro senza $ delimitatori (il sistema li aggiunge automaticamente come display math)
+- detail: testo + LaTeX con $...$ inline e $$...$$ per display
+- Non usare markdown (**testo**, *testo*)
+- correctAnswer: solo il risultato finale`;
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",

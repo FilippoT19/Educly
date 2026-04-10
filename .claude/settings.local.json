@@ -3,7 +3,11 @@
     "permissions": {
         "defaultMode": "acceptEdits",
         "allow": [
-            "Bash"
+            "Bash(node *)",
+            "Bash(npx *)",
+            "Bash(npm *)",
+            "Bash(git add *)",
+            "Bash(git pull *)"
         ]
     }
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { MathText } from "@/components/MathText";
+import { MathKeyboard } from "@/components/MathKeyboard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import {
   BookOpen,
   Send,
   Target,
+  ChevronDown,
 } from "lucide-react";
 import type { AnswerCheckResult, SolutionStep } from "@/lib/claude";
 
@@ -35,7 +37,6 @@ interface Exercise {
   text: string;
   difficulty: number;
   hints: string[];
-  solution?: string;
 }
 
 type Phase =
@@ -43,12 +44,130 @@ type Phase =
   | "loading_exercise"
   | "solving"
   | "correcting"
-  | "solution"       // shows full solution after correct answer
-  | "step_review"    // wrong answer: going through steps one by one
-  | "done";          // step review complete, shows final score
+  | "solution"     // correct answer — shows solution sections
+  | "step_review"  // wrong answer — reviewing steps one by one
+  | "done";        // step review complete
 
 const DIFFICULTY_LABELS = ["", "Facile", "Medio", "Difficile"];
 const DIFFICULTY_COLORS = ["", "text-green-600", "text-yellow-600", "text-red-600"];
+
+// A single step card used in step review
+function StepCard({
+  step,
+  verdict,
+  isCurrent,
+  onYes,
+  onNo,
+}: {
+  step: SolutionStep;
+  verdict: boolean | null;
+  isCurrent: boolean;
+  onYes?: () => void;
+  onNo?: () => void;
+}) {
+  return (
+    <div className={`rounded-xl border transition-colors ${
+      verdict === true
+        ? "border-green-300 bg-green-50 dark:bg-green-950 dark:border-green-800"
+        : verdict === false
+        ? "border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800"
+        : "border-border bg-card"
+    }`}>
+      <div className="flex items-start gap-3 px-4 pt-4 pb-3">
+        <div className={`shrink-0 mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+          verdict === true
+            ? "bg-green-600 text-white"
+            : verdict === false
+            ? "bg-red-500 text-white"
+            : isCurrent
+            ? "bg-primary text-primary-foreground"
+            : "bg-muted text-muted-foreground"
+        }`}>
+          {verdict === true ? <CheckCircle className="h-4 w-4" /> : verdict === false ? <XCircle className="h-4 w-4" /> : step.step}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm">{step.title}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{step.text}</p>
+        </div>
+      </div>
+
+      {/* Formula — always shown */}
+      {step.formula && (
+        <div className="px-4 pb-3">
+          <MathText text={`$$${step.formula}$$`} className="text-center" />
+        </div>
+      )}
+
+      {/* Yes/No buttons only for current step */}
+      {isCurrent && verdict === null && (
+        <div className="px-4 pb-4 flex gap-3">
+          <Button
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+            onClick={onYes}
+          >
+            Sì, l&apos;ho fatto
+          </Button>
+          <Button variant="destructive" className="flex-1" onClick={onNo}>
+            No, non l&apos;ho fatto
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Accordion section for final solution view
+function SolutionAccordion({
+  step,
+  missed,
+}: {
+  step: SolutionStep;
+  missed: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className={`rounded-xl border ${missed ? "border-red-300 dark:border-red-800" : "border-border"}`}>
+      {/* Header — always visible */}
+      <div className="px-4 pt-4 pb-3">
+        <div className="flex items-center gap-2 mb-1">
+          {missed ? (
+            <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+          ) : (
+            <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+          )}
+          <p className="font-semibold text-sm">{step.title}</p>
+        </div>
+        <p className="text-sm text-muted-foreground">{step.text}</p>
+      </div>
+
+      {/* Key formula */}
+      {step.formula && (
+        <div className="px-4 pb-3">
+          <MathText text={`$$${step.formula}$$`} className="text-center" />
+        </div>
+      )}
+
+      {/* Expandable detail */}
+      {step.detail && (
+        <div className="border-t border-border">
+          <button
+            onClick={() => setOpen(!open)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <span>{open ? "Nascondi dettagli" : "Mostra dettagli"}</span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+          </button>
+          {open && (
+            <div className="px-4 pb-4">
+              <MathText text={step.detail} className="text-sm leading-relaxed text-muted-foreground" />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function PracticeSession({
   subject,
@@ -72,20 +191,18 @@ export function PracticeSession({
   const [hintsUsed, setHintsUsed] = useState(false);
   const [error, setError] = useState("");
   const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
-
-  // Correction result
   const [checkResult, setCheckResult] = useState<AnswerCheckResult | null>(null);
 
-  // Step review state
+  // Step review
   const [stepIndex, setStepIndex] = useState(0);
-  const [stepAnswers, setStepAnswers] = useState<boolean[]>([]);
-  const [finalScore, setFinalScore] = useState<number | null>(null);
+  const [stepAnswers, setStepAnswers] = useState<boolean[]>([]); // true=correct, false=missed
 
-  // Recommendation
+  const [finalScore, setFinalScore] = useState<number | null>(null);
   const [recommendation, setRecommendation] = useState<{
     exerciseId: string; topicId: string; reason: string;
   } | null>(null);
 
+  const inputRef = useRef<HTMLInputElement>(null);
   const savedRef = useRef(false);
 
   const successRate =
@@ -176,7 +293,6 @@ export function PracticeSession({
   function saveResult(result: AnswerCheckResult, score: number) {
     if (savedRef.current) return;
     savedRef.current = true;
-
     fetch("/api/exercise/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -189,7 +305,7 @@ export function PracticeSession({
         isCorrect: result.isCorrect,
         score,
         difficulty: exercise?.difficulty ?? 1,
-        fullSolution: result.fullSolution,
+        fullSolution: result.solutionSteps.map(s => s.detail).join("\n\n"),
       }),
     }).catch(() => {});
   }
@@ -215,12 +331,11 @@ export function PracticeSession({
     if (stepIndex < steps.length - 1) {
       setStepIndex(stepIndex + 1);
     } else {
-      // All steps answered — calculate score
       const earnedWeight = steps.reduce(
         (sum, s, i) => sum + (newAnswers[i] ? s.weight : 0),
         0
       );
-      const score = Math.min(earnedWeight, 75); // can't exceed 75 with wrong final answer
+      const score = Math.min(earnedWeight, 75);
       setFinalScore(score);
       setPhase("done");
       saveResult(checkResult, score);
@@ -229,7 +344,6 @@ export function PracticeSession({
   }
 
   const steps: SolutionStep[] = checkResult?.solutionSteps ?? [];
-  const missedSteps = steps.filter((_, i) => stepAnswers[i] === false);
 
   const NextExerciseBlock = () => (
     recommendation ? (
@@ -364,20 +478,24 @@ export function PracticeSession({
 
             <Separator />
 
+            {/* Answer input with math keyboard */}
             <div className="space-y-2">
               <p className="text-sm font-medium">Risultato finale</p>
+              <MathKeyboard
+                inputRef={inputRef}
+                value={studentAnswer}
+                onChange={setStudentAnswer}
+              />
               <input
+                ref={inputRef}
                 type="text"
                 value={studentAnswer}
                 onChange={(e) => setStudentAnswer(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") submitAnswer(); }}
-                placeholder="Es: 3/4, π/2, sqrt(2), 0, diverge..."
+                placeholder="Es: 3/4, pi/2, sqrt(2), 0, inf..."
                 disabled={phase === "correcting"}
                 className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 font-mono"
               />
-              <p className="text-xs text-muted-foreground">
-                Scrivi solo il risultato. Puoi usare: pi, sqrt(), e^x, inf, ecc.
-              </p>
             </div>
 
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
@@ -397,7 +515,7 @@ export function PracticeSession({
           </>
         )}
 
-        {/* SOLUTION — shown after correct answer */}
+        {/* SOLUTION — correct answer: shows all sections as accordion */}
         {phase === "solution" && checkResult && exercise && (
           <>
             <Card className="border-green-500 bg-green-50 dark:bg-green-950">
@@ -413,23 +531,24 @@ export function PracticeSession({
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Soluzione completa</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <MathText text={checkResult.fullSolution} className="text-sm leading-relaxed" />
-              </CardContent>
-            </Card>
+            <div>
+              <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
+                Soluzione
+              </p>
+              <div className="space-y-2">
+                {steps.map((s) => (
+                  <SolutionAccordion key={s.step} step={s} missed={false} />
+                ))}
+              </div>
+            </div>
 
             <NextExerciseBlock />
           </>
         )}
 
-        {/* STEP REVIEW — shown after wrong answer, one step at a time */}
+        {/* STEP REVIEW — wrong answer: cumulative steps */}
         {phase === "step_review" && checkResult && exercise && (
           <>
-            {/* Wrong answer banner */}
             <Card className="border-red-400 bg-red-50 dark:bg-red-950">
               <CardContent className="pt-5 flex items-center gap-4">
                 <XCircle className="h-10 w-10 text-red-500 shrink-0" />
@@ -443,70 +562,23 @@ export function PracticeSession({
               </CardContent>
             </Card>
 
-            {/* Current step */}
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Revisione passaggi</CardTitle>
-                  <span className="text-sm text-muted-foreground">
-                    {stepIndex + 1} / {steps.length}
-                  </span>
-                </div>
-                {/* Progress dots */}
-                <div className="flex gap-1.5 pt-1">
-                  {steps.map((_, i) => (
-                    <div
-                      key={i}
-                      className={`h-1.5 flex-1 rounded-full transition-colors ${
-                        i < stepIndex
-                          ? stepAnswers[i] ? "bg-green-500" : "bg-red-400"
-                          : i === stepIndex
-                          ? "bg-primary"
-                          : "bg-muted"
-                      }`}
-                    />
-                  ))}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-muted/50 rounded-xl p-4">
-                  <MathText
-                    text={steps[stepIndex].description}
-                    className="text-sm leading-relaxed"
+            <div>
+              <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
+                Revisione passaggi — {stepIndex + 1} di {steps.length}
+              </p>
+              <div className="space-y-2">
+                {steps.slice(0, stepIndex + 1).map((s, i) => (
+                  <StepCard
+                    key={s.step}
+                    step={s}
+                    verdict={i < stepAnswers.length ? stepAnswers[i] : null}
+                    isCurrent={i === stepIndex}
+                    onYes={() => answerStep(true)}
+                    onNo={() => answerStep(false)}
                   />
-                </div>
-                <p className="text-sm text-center text-muted-foreground font-medium">
-                  Hai eseguito questo passaggio correttamente?
-                </p>
-                <div className="flex gap-3">
-                  <Button
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => answerStep(true)}
-                  >
-                    Sì, l&apos;ho fatto
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="flex-1"
-                    onClick={() => answerStep(false)}
-                  >
-                    No, non l&apos;ho fatto
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Full solution (collapsed/visible for reference) */}
-            <details className="group">
-              <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none">
-                Mostra soluzione completa
-              </summary>
-              <Card className="mt-2 bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
-                <CardContent className="pt-4">
-                  <MathText text={checkResult.fullSolution} className="text-sm leading-relaxed" />
-                </CardContent>
-              </Card>
-            </details>
+                ))}
+              </div>
+            </div>
           </>
         )}
 
@@ -523,40 +595,26 @@ export function PracticeSession({
                 <div>
                   <p className="font-semibold text-lg">Revisione completata</p>
                   <p className="text-sm text-muted-foreground">
-                    Punteggio parziale: {finalScore}/100
+                    Punteggio: {finalScore}/100
                   </p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Summary of missed steps */}
-            {missedSteps.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-red-500" />
-                    Passaggi da rivedere
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {missedSteps.map((s) => (
-                    <div key={s.step} className="text-sm bg-red-50 dark:bg-red-950 rounded-lg px-3 py-2">
-                      <MathText text={s.description} className="text-muted-foreground" />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Full solution */}
-            <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base">Soluzione corretta</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <MathText text={checkResult.fullSolution} className="text-sm leading-relaxed" />
-              </CardContent>
-            </Card>
+            <div>
+              <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
+                Soluzione
+              </p>
+              <div className="space-y-2">
+                {steps.map((s, i) => (
+                  <SolutionAccordion
+                    key={s.step}
+                    step={s}
+                    missed={stepAnswers[i] === false}
+                  />
+                ))}
+              </div>
+            </div>
 
             <NextExerciseBlock />
           </>
