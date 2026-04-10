@@ -353,8 +353,13 @@ export async function populateExerciseData(
   topicName: string,
   questionLatex: string,
   solutionLatex: string | null,
-): Promise<{ answers: ExerciseAnswer[]; solutionSteps: SolutionStep[] }> {
+  conceptTaxonomy: string[] = [],
+): Promise<{ answers: ExerciseAnswer[]; solutionSteps: SolutionStep[]; conceptTags: string[] }> {
   const subjectName = subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2";
+
+  const taxonomyBlock = conceptTaxonomy.length > 0
+    ? `\nTASONOMIA DI CONCETTI DISPONIBILI (scegli 2-4 tra questi, SOLO da questa lista):\n${conceptTaxonomy.join(", ")}\n`
+    : "";
 
   const prompt = `Sei un professore di ${subjectName} al Politecnico italiano.
 
@@ -364,11 +369,12 @@ ESERCIZIO:
 ${questionLatex}
 
 ${solutionLatex ? `SOLUZIONE COMPLETA:\n${solutionLatex}` : ""}
-
+${taxonomyBlock}
 Il tuo compito:
 1. Identifica le domande dell'esercizio (di solito 1, a volte 2-3 per esercizi con parti a), b), c))
 2. Per ogni domanda: determina se la risposta è "exact" (numero, formula semplice verificabile automaticamente) o "open" (dimostrazione, ragionamento)
 3. Dividi la soluzione in 3-6 passaggi logici con pesi che sommano esattamente 75
+4. Scegli 2-4 concept_tags dalla tassonomia che descrivono i concetti principali testati da questo esercizio
 
 Rispondi SOLO in formato JSON:
 {
@@ -388,7 +394,8 @@ Rispondi SOLO in formato JSON:
       "detail": "Spiegazione dettagliata con LaTeX $inline$ e $$display$$",
       "weight": 25
     }
-  ]
+  ],
+  "conceptTags": ["tag1", "tag2"]
 }
 
 Regole:
@@ -396,7 +403,8 @@ Regole:
 - type "open" se la risposta è una dimostrazione, un ragionamento, o non verificabile automaticamente
 - solutionSteps.title e .text: SOLO testo italiano, nessun LaTeX
 - solutionSteps.formula: LaTeX puro senza $ delimitatori
-- I pesi devono sommare esattamente 75`;
+- I pesi devono sommare esattamente 75
+- conceptTags: SOLO valori dalla tassonomia fornita, nessun tag inventato`;
 
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",

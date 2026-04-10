@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       answerType: ex.answer_type || "open",
       solutionExact: ex.solution_exact || null,
       solutionSteps: ex.solution_steps || [],
+      conceptTags: ex.concept_tags || [],
     });
   }
 
@@ -105,6 +106,7 @@ export async function POST(request: NextRequest) {
       answerType: picked.answer_type || "open",
       solutionExact: picked.solution_exact || null,
       solutionSteps: picked.solution_steps || [],
+      conceptTags: picked.concept_tags || [],
     });
   }
 

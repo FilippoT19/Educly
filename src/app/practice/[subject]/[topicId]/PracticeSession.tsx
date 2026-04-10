@@ -37,6 +37,7 @@ interface Exercise {
   text: string;
   difficulty: number;
   hints: string[];
+  conceptTags?: string[];
 }
 
 type Phase =
@@ -302,6 +303,7 @@ export function PracticeSession({
         score,
         difficulty: exercise?.difficulty ?? 1,
         fullSolution: result.solutionSteps.map(s => s.detail).join("\n\n"),
+        conceptTags: exercise?.conceptTags ?? [],
       }),
     }).catch(() => {});
   }

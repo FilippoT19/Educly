@@ -4,7 +4,7 @@ import { populateExerciseData } from "@/lib/claude";
 import analisi1 from "@/content/analisi1.json";
 import analisi2 from "@/content/analisi2.json";
 
-const curricula: Record<string, typeof analisi1> = { analisi1, analisi2 };
+const curricula: Record<string, typeof analisi1 & { conceptTaxonomy?: string[] }> = { analisi1, analisi2 };
 
 function isAdmin(req: NextRequest) {
   return req.headers.get("x-admin-secret") === process.env.ADMIN_SECRET;
@@ -14,10 +14,16 @@ function getTopicName(subject: string, topicId: string): string {
   return curricula[subject]?.topics.find((t) => t.id === topicId)?.name ?? topicId;
 }
 
+function getConceptTaxonomy(subject: string): string[] {
+  const curriculum = curricula[subject] as typeof analisi2 | undefined;
+  return curriculum && "conceptTaxonomy" in curriculum ? curriculum.conceptTaxonomy : [];
+}
+
 // Fallback when Claude can't parse the exercise
 const OPEN_FALLBACK = {
   answers: [{ label: "Soluzione", type: "open" as const }],
   solutionSteps: [] as never[],
+  conceptTags: [] as string[],
 };
 
 export async function POST(request: NextRequest) {
@@ -55,6 +61,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ processed: 0, remaining: 0 });
   }
 
+  const taxonomy = getConceptTaxonomy(subject);
   let processed = 0;
 
   for (const ex of exercises) {
@@ -64,18 +71,27 @@ export async function POST(request: NextRequest) {
         ex.subject,
         topicName,
         ex.question_latex,
-        ex.solution_latex
+        ex.solution_latex,
+        taxonomy,
       );
 
       await supabase
         .from("exercises")
-        .update({ answers: result.answers, solution_steps: result.solutionSteps })
+        .update({
+          answers: result.answers,
+          solution_steps: result.solutionSteps,
+          concept_tags: result.conceptTags,
+        })
         .eq("id", ex.id);
     } catch {
       // Claude failed (timeout, bad JSON, complex exercise) — save as open so it's not retried
       await supabase
         .from("exercises")
-        .update({ answers: OPEN_FALLBACK.answers, solution_steps: OPEN_FALLBACK.solutionSteps })
+        .update({
+          answers: OPEN_FALLBACK.answers,
+          solution_steps: OPEN_FALLBACK.solutionSteps,
+          concept_tags: OPEN_FALLBACK.conceptTags,
+        })
         .eq("id", ex.id);
     }
     processed++;

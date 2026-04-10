@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     score,
     difficulty,
     fullSolution,
+    conceptTags,
   } = await request.json();
 
   // Save to exercise log
@@ -73,6 +74,49 @@ export async function POST(request: NextRequest) {
       last_error_types: [],
       last_practiced: new Date().toISOString(),
     });
+  }
+
+  // Update concept mastery (weighted average: new = old * 0.7 + score_normalized * 0.3)
+  const tags: string[] = Array.isArray(conceptTags) ? conceptTags : [];
+  if (tags.length > 0) {
+    const scoreNormalized = Math.max(0, Math.min(1, (score ?? 0) / 100));
+
+    // Fetch existing mastery rows for these concepts
+    const { data: existingMastery } = await supabase
+      .from("concept_mastery")
+      .select("id, concept, mastery, attempts")
+      .eq("student_id", user.id)
+      .eq("subject", subject)
+      .in("concept", tags);
+
+    const existingMap = new Map(
+      (existingMastery ?? []).map((row) => [row.concept, row])
+    );
+
+    for (const concept of tags) {
+      const row = existingMap.get(concept);
+      if (row) {
+        const newMastery = row.mastery * 0.7 + scoreNormalized * 0.3;
+        await supabase
+          .from("concept_mastery")
+          .update({
+            mastery: newMastery,
+            attempts: row.attempts + 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", row.id);
+      } else {
+        // First attempt: start from neutral 0.5, apply one update
+        const newMastery = 0.5 * 0.7 + scoreNormalized * 0.3;
+        await supabase.from("concept_mastery").insert({
+          student_id: user.id,
+          subject,
+          concept,
+          mastery: newMastery,
+          attempts: 1,
+        });
+      }
+    }
   }
 
   return NextResponse.json({ ok: true });
