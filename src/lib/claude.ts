@@ -187,6 +187,79 @@ Regole di formato:
   return JSON.parse(jsonMatch[0]) as CorrectionResult;
 }
 
+export interface SolutionStep {
+  step: number;
+  description: string; // description of this step (LaTeX for formulas)
+  weight: number;      // partial-credit weight (all steps sum to 75)
+}
+
+export interface AnswerCheckResult {
+  isCorrect: boolean;
+  correctAnswer: string;   // the correct final answer (LaTeX)
+  fullSolution: string;    // full step-by-step solution (LaTeX)
+  solutionSteps: SolutionStep[];
+}
+
+export async function correctAnswer(
+  subject: string,
+  topicName: string,
+  exerciseText: string,
+  studentAnswer: string,
+): Promise<AnswerCheckResult> {
+  const prompt = `Sei un professore di ${subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2"} al Politecnico italiano.
+
+ESERCIZIO:
+${exerciseText}
+
+RISPOSTA DELLO STUDENTE:
+${studentAnswer}
+
+Il tuo compito:
+1. Determina se la risposta dello studente è matematicamente corretta (accetta notazioni equivalenti: π/2 = pi/2 = 1.5708..., √2 = sqrt(2), ecc.)
+2. Scrivi la soluzione completa passo per passo
+3. Suddividi la soluzione in passaggi logici con un peso in punti (i pesi devono sommare esattamente 75, per il credito parziale in caso di risposta sbagliata)
+
+Rispondi SOLO in formato JSON valido:
+{
+  "isCorrect": true/false,
+  "correctAnswer": "risposta corretta in LaTeX, es: $\\\\frac{\\\\pi}{4}$",
+  "fullSolution": "soluzione completa passo per passo, usa $...$ per inline e $$...$$ per display",
+  "solutionSteps": [
+    {
+      "step": 1,
+      "description": "descrizione del passaggio con formule LaTeX inline $...$",
+      "weight": 20
+    },
+    {
+      "step": 2,
+      "description": "...",
+      "weight": 25
+    }
+  ]
+}
+
+Regole:
+- I pesi in solutionSteps devono sommare esattamente 75
+- Usa da 3 a 6 passaggi logici (non troppo dettagliati, non troppo generici)
+- Le descrizioni dei passaggi devono essere comprensibili da uno studente
+- Non usare markdown (**testo**) nelle descrizioni
+- correctAnswer deve contenere solo il risultato finale, non l'intera soluzione`;
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 2048,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const content = response.content[0];
+  if (content.type !== "text") throw new Error("Unexpected response type");
+
+  const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("No JSON found in response");
+
+  return JSON.parse(jsonMatch[0]) as AnswerCheckResult;
+}
+
 export async function correctExerciseText(
   subject: string,
   topicName: string,

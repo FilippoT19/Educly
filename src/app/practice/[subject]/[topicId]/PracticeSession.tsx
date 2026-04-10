@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { MathText } from "@/components/MathText";
 import { Button } from "@/components/ui/button";
@@ -16,8 +16,8 @@ import {
   BookOpen,
   Send,
   Target,
-  ChevronRight,
 } from "lucide-react";
+import type { AnswerCheckResult, SolutionStep } from "@/lib/claude";
 
 interface Topic {
   id: string;
@@ -35,30 +35,17 @@ interface Exercise {
   text: string;
   difficulty: number;
   hints: string[];
-  answerType?: "exact" | "open";
-  solutionExact?: string | null;
-  solutionSteps?: string[];
-  solution?: string; // solution_latex from DB
+  solution?: string;
 }
 
-interface CorrectionStep {
-  step: number;
-  label: string;
-  correct: boolean;
-  comment: string;
-}
-
-interface Correction {
-  isCorrect: boolean;
-  score: number;
-  errorTypes: string[];
-  steps: CorrectionStep[];
-  solutionLatex: string;
-  whatToReview: string[];
-  solutionSteps?: string[];
-}
-
-type Phase = "idle" | "loading_exercise" | "solving" | "correcting" | "feedback";
+type Phase =
+  | "idle"
+  | "loading_exercise"
+  | "solving"
+  | "correcting"
+  | "solution"       // shows full solution after correct answer
+  | "step_review"    // wrong answer: going through steps one by one
+  | "done";          // step review complete, shows final score
 
 const DIFFICULTY_LABELS = ["", "Facile", "Medio", "Difficile"];
 const DIFFICULTY_COLORS = ["", "text-green-600", "text-yellow-600", "text-red-600"];
@@ -80,19 +67,26 @@ export function PracticeSession({
 }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [exercise, setExercise] = useState<Exercise | null>(null);
-  const [correction, setCorrection] = useState<Correction | null>(null);
   const [studentAnswer, setStudentAnswer] = useState("");
   const [showHints, setShowHints] = useState(false);
   const [hintsUsed, setHintsUsed] = useState(false);
   const [error, setError] = useState("");
   const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
+
+  // Correction result
+  const [checkResult, setCheckResult] = useState<AnswerCheckResult | null>(null);
+
+  // Step review state
+  const [stepIndex, setStepIndex] = useState(0);
+  const [stepAnswers, setStepAnswers] = useState<boolean[]>([]);
+  const [finalScore, setFinalScore] = useState<number | null>(null);
+
+  // Recommendation
   const [recommendation, setRecommendation] = useState<{
     exerciseId: string; topicId: string; reason: string;
   } | null>(null);
 
-  // Interactive step review state
-  const [stepReviewIndex, setStepReviewIndex] = useState<number | null>(null);
-  const [stepResults, setStepResults] = useState<boolean[]>([]);
+  const savedRef = useRef(false);
 
   const successRate =
     stats && stats.exercises_done > 0
@@ -107,14 +101,16 @@ export function PracticeSession({
   async function loadExercise(exerciseId?: string) {
     setPhase("loading_exercise");
     setExercise(null);
-    setCorrection(null);
     setStudentAnswer("");
     setShowHints(false);
     setHintsUsed(false);
     setError("");
+    setCheckResult(null);
+    setStepIndex(0);
+    setStepAnswers([]);
+    setFinalScore(null);
     setRecommendation(null);
-    setStepReviewIndex(null);
-    setStepResults([]);
+    savedRef.current = false;
 
     const res = await fetch("/api/exercise/generate", {
       method: "POST",
@@ -134,10 +130,8 @@ export function PracticeSession({
     setPhase("solving");
   }
 
-  async function submitSolution() {
-    if (!exercise) return;
-
-    if (!studentAnswer.trim()) {
+  async function submitAnswer() {
+    if (!exercise || !studentAnswer.trim()) {
       setError("Scrivi la tua risposta prima di inviare.");
       return;
     }
@@ -150,16 +144,9 @@ export function PracticeSession({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         subject,
-        topicId: topic.id,
         topicName: topic.name,
         exerciseText: exercise.text,
-        difficulty: exercise.difficulty,
-        hintsUsed,
         studentAnswer: studentAnswer.trim(),
-        answerType: exercise.answerType || "open",
-        solutionExact: exercise.solutionExact || null,
-        solutionLatex: exercise.solution || null,
-        solutionSteps: exercise.solutionSteps || [],
       }),
     });
 
@@ -170,27 +157,48 @@ export function PracticeSession({
       return;
     }
 
-    const data = await res.json();
-    setCorrection(data);
-    setPhase("feedback");
+    const result: AnswerCheckResult = await res.json();
+    setCheckResult(result);
 
-    if (currentExerciseId) {
-      fetch("/api/exercise/attempts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          exerciseId: currentExerciseId,
-          isCorrect: data.isCorrect,
-          score: data.score,
-        }),
-      }).catch(() => {});
+    if (result.isCorrect) {
+      const score = hintsUsed ? 70 : 100;
+      setFinalScore(score);
+      setPhase("solution");
+      saveResult(result, score);
+      fetchRecommendation(score);
+    } else {
+      setStepIndex(0);
+      setStepAnswers([]);
+      setPhase("step_review");
     }
+  }
 
-    // Fetch recommendation
+  function saveResult(result: AnswerCheckResult, score: number) {
+    if (savedRef.current) return;
+    savedRef.current = true;
+
+    fetch("/api/exercise/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject,
+        topicId: topic.id,
+        exerciseId: currentExerciseId,
+        exerciseText: exercise?.text ?? "",
+        studentAnswer,
+        isCorrect: result.isCorrect,
+        score,
+        difficulty: exercise?.difficulty ?? 1,
+        fullSolution: result.fullSolution,
+      }),
+    }).catch(() => {});
+  }
+
+  function fetchRecommendation(score: number) {
     const recUrl = new URL("/api/exercise/recommend", window.location.origin);
     recUrl.searchParams.set("subject", subject);
     recUrl.searchParams.set("topicId", topic.id);
-    recUrl.searchParams.set("score", String(data.score));
+    recUrl.searchParams.set("score", String(score));
     if (currentExerciseId) recUrl.searchParams.set("currentExerciseId", currentExerciseId);
     fetch(recUrl.toString())
       .then(r => r.json())
@@ -198,26 +206,61 @@ export function PracticeSession({
       .catch(() => {});
   }
 
-  function startStepReview() {
-    setStepReviewIndex(0);
-    setStepResults([]);
-  }
-
   function answerStep(correct: boolean) {
-    const steps = correction?.solutionSteps || [];
-    const newResults = [...stepResults, correct];
-    setStepResults(newResults);
-    if (stepReviewIndex !== null && stepReviewIndex < steps.length - 1) {
-      setStepReviewIndex(stepReviewIndex + 1);
+    if (!checkResult) return;
+    const steps = checkResult.solutionSteps;
+    const newAnswers = [...stepAnswers, correct];
+    setStepAnswers(newAnswers);
+
+    if (stepIndex < steps.length - 1) {
+      setStepIndex(stepIndex + 1);
     } else {
-      setStepReviewIndex(-1); // done
+      // All steps answered — calculate score
+      const earnedWeight = steps.reduce(
+        (sum, s, i) => sum + (newAnswers[i] ? s.weight : 0),
+        0
+      );
+      const score = Math.min(earnedWeight, 75); // can't exceed 75 with wrong final answer
+      setFinalScore(score);
+      setPhase("done");
+      saveResult(checkResult, score);
+      fetchRecommendation(score);
     }
   }
 
-  const reviewSteps = correction?.solutionSteps || [];
-  const missedSteps = stepResults
-    .map((ok, i) => (!ok ? i + 1 : null))
-    .filter(Boolean) as number[];
+  const steps: SolutionStep[] = checkResult?.solutionSteps ?? [];
+  const missedSteps = steps.filter((_, i) => stepAnswers[i] === false);
+
+  const NextExerciseBlock = () => (
+    recommendation ? (
+      <Card className="border-violet-200 bg-violet-50 dark:bg-violet-950 dark:border-violet-800">
+        <CardContent className="pt-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <Target className="h-5 w-5 text-violet-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-violet-800 dark:text-violet-200 mb-1">
+                Consigliato per te
+              </p>
+              <p className="text-sm text-violet-700 dark:text-violet-300">{recommendation.reason}</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              className="flex-1 bg-violet-600 hover:bg-violet-700 text-white"
+              onClick={() => loadExercise(recommendation.exerciseId)}
+            >
+              Fai questo esercizio
+            </Button>
+            <Button variant="outline" onClick={() => loadExercise()}>Casuale</Button>
+          </div>
+        </CardContent>
+      </Card>
+    ) : (
+      <Button size="lg" className="w-full" onClick={() => loadExercise()}>
+        Prossimo esercizio
+      </Button>
+    )
+  );
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -245,7 +288,7 @@ export function PracticeSession({
 
       <div className="flex-1 flex flex-col max-w-2xl mx-auto w-full px-4 py-4 gap-4">
 
-        {/* START STATE */}
+        {/* IDLE */}
         {phase === "idle" && (
           <div className="flex flex-col items-center justify-center flex-1 text-center gap-4">
             <BookOpen className="h-12 w-12 text-muted-foreground" />
@@ -255,9 +298,7 @@ export function PracticeSession({
                 L&apos;AI genererà un esercizio calibrato sul tuo livello
               </p>
             </div>
-            <Button size="lg" onClick={() => loadExercise()}>
-              Genera esercizio
-            </Button>
+            <Button size="lg" onClick={() => loadExercise()}>Genera esercizio</Button>
           </div>
         )}
 
@@ -272,7 +313,6 @@ export function PracticeSession({
         {/* SOLVING */}
         {(phase === "solving" || phase === "correcting") && exercise && (
           <>
-            {/* Exercise text */}
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
@@ -287,7 +327,6 @@ export function PracticeSession({
               </CardContent>
             </Card>
 
-            {/* Hints */}
             {exercise.hints.length > 0 && (
               <div>
                 {!showHints ? (
@@ -325,26 +364,20 @@ export function PracticeSession({
 
             <Separator />
 
-            {/* Answer input */}
             <div className="space-y-2">
-              <p className="text-sm font-medium">La tua risposta</p>
-              <textarea
+              <p className="text-sm font-medium">Risultato finale</p>
+              <input
+                type="text"
                 value={studentAnswer}
                 onChange={(e) => setStudentAnswer(e.target.value)}
-                placeholder={
-                  exercise.answerType === "exact"
-                    ? "Scrivi il risultato finale (es: 3/4, π/2, 0)..."
-                    : "Scrivi la tua soluzione passo per passo..."
-                }
+                onKeyDown={(e) => { if (e.key === "Enter") submitAnswer(); }}
+                placeholder="Es: 3/4, π/2, sqrt(2), 0, diverge..."
                 disabled={phase === "correcting"}
-                rows={exercise.answerType === "exact" ? 2 : 6}
-                className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 resize-none font-mono"
+                className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 font-mono"
               />
-              {exercise.answerType === "open" && (
-                <p className="text-xs text-muted-foreground">
-                  Puoi usare notazione matematica: es. sqrt(2), pi/4, integral, lim_{"{x→0}"}
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Scrivi solo il risultato. Puoi usare: pi, sqrt(), e^x, inf, ecc.
+              </p>
             </div>
 
             {error && <p className="text-sm text-destructive text-center">{error}</p>}
@@ -352,82 +385,163 @@ export function PracticeSession({
             <Button
               size="lg"
               className="w-full gap-2"
-              onClick={submitSolution}
+              onClick={submitAnswer}
               disabled={phase === "correcting"}
             >
               {phase === "correcting" ? (
                 <><RefreshCw className="h-4 w-4 animate-spin" /> Correzione in corso...</>
               ) : (
-                <><Send className="h-4 w-4" /> Invia per correzione</>
+                <><Send className="h-4 w-4" /> Invia risposta</>
               )}
             </Button>
           </>
         )}
 
-        {/* FEEDBACK */}
-        {phase === "feedback" && correction && exercise && (
+        {/* SOLUTION — shown after correct answer */}
+        {phase === "solution" && checkResult && exercise && (
           <>
-            {/* Result card */}
-            <Card className={correction.isCorrect
-              ? "border-green-500 bg-green-50 dark:bg-green-950"
-              : "border-red-400 bg-red-50 dark:bg-red-950"
-            }>
+            <Card className="border-green-500 bg-green-50 dark:bg-green-950">
               <CardContent className="pt-5 flex items-center gap-4">
-                {correction.isCorrect ? (
-                  <CheckCircle className="h-10 w-10 text-green-600 shrink-0" />
-                ) : (
-                  <XCircle className="h-10 w-10 text-red-500 shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-lg">
-                    {correction.isCorrect ? "Corretto!" : "Non ancora..."}
-                  </p>
+                <CheckCircle className="h-10 w-10 text-green-600 shrink-0" />
+                <div>
+                  <p className="font-semibold text-lg">Corretto!</p>
                   <p className="text-sm text-muted-foreground">
-                    Punteggio: {correction.score}/100
+                    Punteggio: {finalScore}/100
+                    {hintsUsed && " (suggerimenti usati)"}
                   </p>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Your answer */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">La tua risposta</CardTitle>
+                <CardTitle className="text-base">Soluzione completa</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm font-mono text-muted-foreground whitespace-pre-wrap">{studentAnswer}</p>
+              <CardContent className="space-y-4">
+                <MathText text={checkResult.fullSolution} className="text-sm leading-relaxed" />
               </CardContent>
             </Card>
 
-            {correction.errorTypes.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {correction.errorTypes.map((e) => (
-                  <Badge key={e} variant="destructive" className="text-xs">{e}</Badge>
-                ))}
-              </div>
-            )}
+            <NextExerciseBlock />
+          </>
+        )}
 
-            {/* Evaluation steps */}
-            {correction.steps && correction.steps.length > 0 && (
+        {/* STEP REVIEW — shown after wrong answer, one step at a time */}
+        {phase === "step_review" && checkResult && exercise && (
+          <>
+            {/* Wrong answer banner */}
+            <Card className="border-red-400 bg-red-50 dark:bg-red-950">
+              <CardContent className="pt-5 flex items-center gap-4">
+                <XCircle className="h-10 w-10 text-red-500 shrink-0" />
+                <div>
+                  <p className="font-semibold text-lg">Non ancora...</p>
+                  <p className="text-sm text-muted-foreground">
+                    La risposta corretta è{" "}
+                    <MathText text={checkResult.correctAnswer} className="inline font-medium" />
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Current step */}
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Revisione passaggi</CardTitle>
+                  <span className="text-sm text-muted-foreground">
+                    {stepIndex + 1} / {steps.length}
+                  </span>
+                </div>
+                {/* Progress dots */}
+                <div className="flex gap-1.5 pt-1">
+                  {steps.map((_, i) => (
+                    <div
+                      key={i}
+                      className={`h-1.5 flex-1 rounded-full transition-colors ${
+                        i < stepIndex
+                          ? stepAnswers[i] ? "bg-green-500" : "bg-red-400"
+                          : i === stepIndex
+                          ? "bg-primary"
+                          : "bg-muted"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-muted/50 rounded-xl p-4">
+                  <MathText
+                    text={steps[stepIndex].description}
+                    className="text-sm leading-relaxed"
+                  />
+                </div>
+                <p className="text-sm text-center text-muted-foreground font-medium">
+                  Hai eseguito questo passaggio correttamente?
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => answerStep(true)}
+                  >
+                    Sì, l&apos;ho fatto
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    className="flex-1"
+                    onClick={() => answerStep(false)}
+                  >
+                    No, non l&apos;ho fatto
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Full solution (collapsed/visible for reference) */}
+            <details className="group">
+              <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none">
+                Mostra soluzione completa
+              </summary>
+              <Card className="mt-2 bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
+                <CardContent className="pt-4">
+                  <MathText text={checkResult.fullSolution} className="text-sm leading-relaxed" />
+                </CardContent>
+              </Card>
+            </details>
+          </>
+        )}
+
+        {/* DONE — step review complete */}
+        {phase === "done" && checkResult && exercise && (
+          <>
+            <Card className="border-orange-400 bg-orange-50 dark:bg-orange-950">
+              <CardContent className="pt-5 flex items-center gap-4">
+                <div className="h-10 w-10 rounded-full bg-orange-200 dark:bg-orange-800 flex items-center justify-center shrink-0">
+                  <span className="font-bold text-orange-700 dark:text-orange-200 text-sm">
+                    {finalScore}
+                  </span>
+                </div>
+                <div>
+                  <p className="font-semibold text-lg">Revisione completata</p>
+                  <p className="text-sm text-muted-foreground">
+                    Punteggio parziale: {finalScore}/100
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Summary of missed steps */}
+            {missedSteps.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Correzione passo per passo</CardTitle>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <XCircle className="h-4 w-4 text-red-500" />
+                    Passaggi da rivedere
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  {correction.steps.map((s) => (
-                    <div key={s.step} className="flex gap-3">
-                      <div className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-0.5 ${
-                        s.correct ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
-                      }`}>
-                        {s.correct
-                          ? <CheckCircle className="h-4 w-4" />
-                          : <XCircle className="h-4 w-4" />
-                        }
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium mb-0.5">{s.label}</p>
-                        <MathText text={s.comment} className="text-sm text-muted-foreground leading-relaxed" />
-                      </div>
+                <CardContent className="space-y-2">
+                  {missedSteps.map((s) => (
+                    <div key={s.step} className="text-sm bg-red-50 dark:bg-red-950 rounded-lg px-3 py-2">
+                      <MathText text={s.description} className="text-muted-foreground" />
                     </div>
                   ))}
                 </CardContent>
@@ -435,157 +549,16 @@ export function PracticeSession({
             )}
 
             {/* Full solution */}
-            {correction.solutionLatex && (
-              <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Soluzione corretta</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <MathText text={correction.solutionLatex} className="text-sm leading-relaxed" />
-                </CardContent>
-              </Card>
-            )}
+            <Card className="bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Soluzione corretta</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MathText text={checkResult.fullSolution} className="text-sm leading-relaxed" />
+              </CardContent>
+            </Card>
 
-            {/* Interactive step review — shown only if wrong and steps exist */}
-            {!correction.isCorrect && reviewSteps.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Trova dove hai sbagliato</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {stepReviewIndex === null ? (
-                    <div className="text-center py-2">
-                      <p className="text-sm text-muted-foreground mb-3">
-                        Rispondi passo per passo per capire dove ti sei fermato.
-                      </p>
-                      <Button variant="outline" onClick={startStepReview} className="gap-2">
-                        <ChevronRight className="h-4 w-4" />
-                        Inizia revisione
-                      </Button>
-                    </div>
-                  ) : stepReviewIndex === -1 ? (
-                    // Review complete
-                    <div className="space-y-3">
-                      {missedSteps.length === 0 ? (
-                        <p className="text-sm text-green-700 dark:text-green-400">
-                          Hai eseguito tutti i passaggi! L&apos;errore potrebbe essere un calcolo o un segno.
-                        </p>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium">
-                            Hai saltato o sbagliato {missedSteps.length === 1 ? "il passaggio" : "i passaggi"}:
-                          </p>
-                          <ul className="space-y-1">
-                            {missedSteps.map((i) => (
-                              <li key={i} className="text-sm flex gap-2 items-start">
-                                <XCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-                                <MathText text={reviewSteps[i - 1]} className="text-muted-foreground" />
-                              </li>
-                            ))}
-                          </ul>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    // Showing a step
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                        <span>Passo {stepReviewIndex + 1} di {reviewSteps.length}</span>
-                        <div className="flex gap-1">
-                          {reviewSteps.map((_, i) => (
-                            <div
-                              key={i}
-                              className={`w-2 h-2 rounded-full ${
-                                i < stepResults.length
-                                  ? stepResults[i] ? "bg-green-500" : "bg-red-400"
-                                  : i === stepReviewIndex ? "bg-primary" : "bg-muted"
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <div className="bg-muted/50 rounded-lg p-4">
-                        <MathText text={reviewSteps[stepReviewIndex]} className="text-sm leading-relaxed" />
-                      </div>
-                      <p className="text-sm text-center text-muted-foreground">
-                        Hai eseguito questo passaggio correttamente?
-                      </p>
-                      <div className="flex gap-3">
-                        <Button
-                          className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => answerStep(true)}
-                        >
-                          Sì, l&apos;ho fatto
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          className="flex-1"
-                          onClick={() => answerStep(false)}
-                        >
-                          No, non l&apos;ho fatto
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* What to review */}
-            {correction.whatToReview.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <BookOpen className="h-4 w-4" />
-                    Da ripassare
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-1">
-                    {correction.whatToReview.map((item) => (
-                      <li key={item} className="text-sm flex gap-2">
-                        <span className="text-muted-foreground">•</span>
-                        <MathText text={item} />
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Recommendation */}
-            {recommendation ? (
-              <Card className="border-violet-200 bg-violet-50 dark:bg-violet-950 dark:border-violet-800">
-                <CardContent className="pt-4 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <Target className="h-5 w-5 text-violet-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-semibold text-violet-800 dark:text-violet-200 mb-1">
-                        Consigliato per te
-                      </p>
-                      <p className="text-sm text-violet-700 dark:text-violet-300">
-                        {recommendation.reason}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1 bg-violet-600 hover:bg-violet-700 text-white"
-                      onClick={() => loadExercise(recommendation.exerciseId)}
-                    >
-                      Fai questo esercizio
-                    </Button>
-                    <Button variant="outline" onClick={() => loadExercise()}>
-                      Casuale
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Button size="lg" className="w-full" onClick={() => loadExercise()}>
-                Prossimo esercizio
-              </Button>
-            )}
+            <NextExerciseBlock />
           </>
         )}
       </div>
