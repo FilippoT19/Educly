@@ -196,6 +196,12 @@ export interface SolutionStep {
   weight: number;      // partial-credit weight (all steps sum to 75)
 }
 
+export interface ExerciseAnswer {
+  label: string;    // "Risultato", "a)", "b)", etc.
+  type: "exact" | "open";
+  value?: string;   // expected answer for exact type (normalized, no LaTeX delimiters)
+}
+
 export interface AnswerCheckResult {
   isCorrect: boolean;
   correctAnswer: string;   // the correct final answer (LaTeX inline: $...$)
@@ -340,4 +346,69 @@ Regole di formato:
   if (!jsonMatch) throw new Error("No JSON found in response");
 
   return JSON.parse(jsonMatch[0]) as CorrectionResult;
+}
+
+export async function populateExerciseData(
+  subject: string,
+  topicName: string,
+  questionLatex: string,
+  solutionLatex: string | null,
+): Promise<{ answers: ExerciseAnswer[]; solutionSteps: SolutionStep[] }> {
+  const subjectName = subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2";
+
+  const prompt = `Sei un professore di ${subjectName} al Politecnico italiano.
+
+Analizza questo esercizio e la sua soluzione:
+
+ESERCIZIO:
+${questionLatex}
+
+${solutionLatex ? `SOLUZIONE COMPLETA:\n${solutionLatex}` : ""}
+
+Il tuo compito:
+1. Identifica le domande dell'esercizio (di solito 1, a volte 2-3 per esercizi con parti a), b), c))
+2. Per ogni domanda: determina se la risposta è "exact" (numero, formula semplice verificabile automaticamente) o "open" (dimostrazione, ragionamento)
+3. Dividi la soluzione in 3-6 passaggi logici con pesi che sommano esattamente 75
+
+Rispondi SOLO in formato JSON:
+{
+  "answers": [
+    {
+      "label": "Risultato",
+      "type": "exact",
+      "value": "risposta normalizzata senza LaTeX, es: pi/4 oppure 3/2 oppure 0"
+    }
+  ],
+  "solutionSteps": [
+    {
+      "step": 1,
+      "title": "Titolo del passaggio (testo semplice)",
+      "text": "Spiegazione breve in italiano, nessun LaTeX.",
+      "formula": "formula principale in LaTeX puro senza delimitatori $, es: \\int_0^1 x^2 dx = \\frac{1}{3}",
+      "detail": "Spiegazione dettagliata con LaTeX $inline$ e $$display$$",
+      "weight": 25
+    }
+  ]
+}
+
+Regole:
+- answers.value: testo semplice normalizzato (es: "pi/4" non "\\frac{\\pi}{4}"), accetta varianti comuni
+- type "open" se la risposta è una dimostrazione, un ragionamento, o non verificabile automaticamente
+- solutionSteps.title e .text: SOLO testo italiano, nessun LaTeX
+- solutionSteps.formula: LaTeX puro senza $ delimitatori
+- I pesi devono sommare esattamente 75`;
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-6",
+    max_tokens: 2048,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const content = response.content[0];
+  if (content.type !== "text") throw new Error("Unexpected response type");
+
+  const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("No JSON found in response");
+
+  return JSON.parse(jsonMatch[0]);
 }

@@ -259,6 +259,7 @@ export function PracticeSession({
         topicName: topic.name,
         exerciseText: exercise.text,
         studentAnswer: studentAnswer.trim(),
+        exerciseId: currentExerciseId ?? undefined,
       }),
     });
 

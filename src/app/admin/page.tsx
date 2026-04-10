@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Upload, CheckCircle, AlertCircle, Loader2,
   BookOpen, PenLine, Eye, Pencil, Trash2, Save, X, Plus,
-  Library, ChevronRight, ArrowLeft, BookMarked, FolderOpen, UserPlus,
+  Library, ChevronRight, ArrowLeft, BookMarked, FolderOpen, UserPlus, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MathText } from "@/components/MathText";
@@ -167,17 +167,84 @@ function ResourceCard({ resource, onClick }: { resource: SourceDocument; onClick
   );
 }
 
+// ── Populate all button ───────────────────────────────────────────────────────
+function PopulateAllButton({ subject, secret, onDone }: { subject: string; secret: string; onDone: () => void }) {
+  const [status, setStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [msg, setMsg] = useState("");
+
+  async function run() {
+    setStatus("running");
+    setMsg("");
+    const res = await fetch("/api/admin/exercises/populate", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-secret": secret },
+      body: JSON.stringify({ subject }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setMsg(`${data.processed} esercizi popolati`);
+      setStatus("done");
+      onDone();
+    } else {
+      setMsg(data.error ?? "Errore");
+      setStatus("error");
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {msg && (
+        <span className={`text-xs ${status === "done" ? "text-green-700" : "text-destructive"}`}>{msg}</span>
+      )}
+      <Button size="sm" variant="outline" onClick={run} disabled={status === "running"} className="gap-1.5">
+        {status === "running"
+          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Popolando…</>
+          : <><Zap className="h-3.5 w-3.5 text-amber-500" />Popola mancanti</>}
+      </Button>
+    </div>
+  );
+}
+
 // ── Exercise editor ───────────────────────────────────────────────────────────
+interface ExerciseAnswer {
+  label: string;
+  type: "exact" | "open";
+  value?: string;
+}
+
 interface Exercise {
   id: string; topic_id: string; difficulty: number; source: string;
   question_latex: string; solution_latex: string; hints: string[];
   engineering: string; section: string;
+  answers?: ExerciseAnswer[];
+  solution_steps?: unknown[];
 }
 
-function ExerciseCard({ ex, secret, onDelete }: { ex: Exercise; secret: string; onDelete: (id: string) => void }) {
+function ExerciseCard({ ex, secret, onDelete, onPopulated }: {
+  ex: Exercise; secret: string;
+  onDelete: (id: string) => void;
+  onPopulated?: (id: string, answers: ExerciseAnswer[]) => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(ex);
   const [saving, setSaving] = useState(false);
+  const [populating, setPopulating] = useState(false);
+
+  const hasAnswers = ex.answers && ex.answers.length > 0;
+
+  async function populate() {
+    setPopulating(true);
+    const res = await fetch("/api/admin/exercises/populate-one", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-secret": secret },
+      body: JSON.stringify({ id: ex.id }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      onPopulated?.(ex.id, data.answers);
+    }
+    setPopulating(false);
+  }
 
   async function save() {
     setSaving(true);
@@ -204,13 +271,46 @@ function ExerciseCard({ ex, secret, onDelete }: { ex: Exercise; secret: string; 
           <Badge variant="outline" className="text-xs">{ex.source}</Badge>
           {ex.engineering !== "tutti" && <Badge variant="outline" className="text-xs">{ex.engineering}</Badge>}
           {ex.section !== "tutti" && <Badge variant="outline" className="text-xs">Scaglione {ex.section}</Badge>}
+          {/* Answers status */}
+          {hasAnswers ? (
+            <Badge className="text-xs bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-200">
+              ✓ {ex.answers!.length} {ex.answers!.length === 1 ? "risposta" : "risposte"}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs text-orange-600 border-orange-400">
+              ⚠ Da popolare
+            </Badge>
+          )}
           <div className="ml-auto flex gap-1">
+            <button
+              onClick={populate}
+              disabled={populating}
+              title="Auto-popola con AI"
+              className="p-1.5 rounded hover:bg-muted disabled:opacity-50"
+            >
+              {populating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4 text-amber-500" />}
+            </button>
             <button onClick={() => setEditing(!editing)} className="p-1.5 rounded hover:bg-muted">
               {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
             </button>
             <button onClick={del} className="p-1.5 rounded hover:bg-red-50 text-red-500"><Trash2 className="h-4 w-4" /></button>
           </div>
         </div>
+        {/* Show answers inline when populated */}
+        {hasAnswers && !editing && (
+          <div className="flex flex-wrap gap-2">
+            {ex.answers!.map((a, i) => (
+              <div key={i} className="flex items-center gap-1.5 text-xs bg-muted/60 rounded-lg px-2.5 py-1.5">
+                <span className="font-medium text-muted-foreground">{a.label}:</span>
+                {a.type === "exact" ? (
+                  <span className="font-mono">{a.value}</span>
+                ) : (
+                  <span className="italic text-muted-foreground">risposta aperta</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {editing ? (
           <div className="space-y-3">
             <Field label="Domanda (LaTeX)">
@@ -885,10 +985,16 @@ export default function AdminPage() {
             </div>
             {exercises.length > 0 ? (
               <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">{exercises.length} esercizi</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">{exercises.length} esercizi</p>
+                  <PopulateAllButton subject={reviewSubject} secret={secret} onDone={loadExercises} />
+                </div>
                 {exercises.map((ex) => (
                   <ExerciseCard key={ex.id} ex={ex} secret={secret}
-                    onDelete={(id) => setExercises((prev) => prev.filter((e) => e.id !== id))} />
+                    onDelete={(id) => setExercises((prev) => prev.filter((e) => e.id !== id))}
+                    onPopulated={(id, answers) => setExercises((prev) =>
+                      prev.map((e) => e.id === id ? { ...e, answers } : e)
+                    )} />
                 ))}
               </div>
             ) : (
