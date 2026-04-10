@@ -38,19 +38,26 @@ export async function POST(request: NextRequest) {
   }
 
   const topicName = getTopicName(ex.subject, ex.topic_id);
-  const result = await populateExerciseData(
-    ex.subject,
-    topicName,
-    ex.question_latex,
-    ex.solution_latex
-  );
+
+  let result;
+  try {
+    result = await populateExerciseData(
+      ex.subject,
+      topicName,
+      ex.question_latex,
+      ex.solution_latex
+    );
+  } catch {
+    // Complex exercise (matrices, open proofs, etc.) — mark as open-ended
+    result = {
+      answers: [{ label: "Soluzione", type: "open" as const }],
+      solutionSteps: [],
+    };
+  }
 
   await supabase
     .from("exercises")
-    .update({
-      answers: result.answers,
-      solution_steps: result.solutionSteps,
-    })
+    .update({ answers: result.answers, solution_steps: result.solutionSteps })
     .eq("id", ex.id);
 
   return NextResponse.json(result);

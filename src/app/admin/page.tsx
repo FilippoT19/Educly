@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Upload, CheckCircle, AlertCircle, Loader2,
   BookOpen, PenLine, Eye, Pencil, Trash2, Save, X, Plus,
-  Library, ChevronRight, ArrowLeft, BookMarked, FolderOpen, UserPlus, Zap,
+  Library, ChevronRight, ArrowLeft, BookMarked, FolderOpen, UserPlus, Zap, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MathText } from "@/components/MathText";
@@ -167,39 +167,48 @@ function ResourceCard({ resource, onClick }: { resource: SourceDocument; onClick
   );
 }
 
-// ── Populate all button ───────────────────────────────────────────────────────
+// ── Populate all button (batches of 5) ───────────────────────────────────────
 function PopulateAllButton({ subject, secret, onDone }: { subject: string; secret: string; onDone: () => void }) {
-  const [status, setStatus] = useState<"idle" | "running" | "done" | "error">("idle");
-  const [msg, setMsg] = useState("");
+  const [running, setRunning] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const [processed, setProcessed] = useState(0);
 
-  async function run() {
-    setStatus("running");
-    setMsg("");
+  async function runBatch() {
+    setRunning(true);
     const res = await fetch("/api/admin/exercises/populate", {
       method: "POST",
       headers: { "content-type": "application/json", "x-admin-secret": secret },
-      body: JSON.stringify({ subject }),
+      body: JSON.stringify({ subject, limit: 5 }),
     });
     const data = await res.json();
     if (res.ok) {
-      setMsg(`${data.processed} esercizi popolati`);
-      setStatus("done");
+      setProcessed((p) => p + (data.processed ?? 0));
+      setRemaining(data.remaining ?? 0);
       onDone();
-    } else {
-      setMsg(data.error ?? "Errore");
-      setStatus("error");
     }
+    setRunning(false);
   }
 
   return (
     <div className="flex items-center gap-2">
-      {msg && (
-        <span className={`text-xs ${status === "done" ? "text-green-700" : "text-destructive"}`}>{msg}</span>
+      {processed > 0 && (
+        <span className="text-xs text-muted-foreground">{processed} popolati</span>
       )}
-      <Button size="sm" variant="outline" onClick={run} disabled={status === "running"} className="gap-1.5">
-        {status === "running"
-          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Popolando…</>
-          : <><Zap className="h-3.5 w-3.5 text-amber-500" />Popola mancanti</>}
+      {remaining !== null && remaining > 0 && (
+        <span className="text-xs text-orange-600">{remaining} rimasti</span>
+      )}
+      {remaining === 0 && processed > 0 && (
+        <span className="text-xs text-green-700">✓ Completato</span>
+      )}
+      <Button
+        size="sm" variant="outline"
+        onClick={runBatch}
+        disabled={running || remaining === 0}
+        className="gap-1.5"
+      >
+        {running
+          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Popolo 5…</>
+          : <><Zap className="h-3.5 w-3.5 text-amber-500" />{remaining === null ? "Popola 5" : "Popola altri 5"}</>}
       </Button>
     </div>
   );
@@ -225,12 +234,15 @@ function ExerciseCard({ ex, secret, onDelete, onPopulated }: {
   onDelete: (id: string) => void;
   onPopulated?: (id: string, answers: ExerciseAnswer[]) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(ex);
   const [saving, setSaving] = useState(false);
   const [populating, setPopulating] = useState(false);
 
   const hasAnswers = ex.answers && ex.answers.length > 0;
+  // Truncate question to first 80 chars for preview
+  const preview = ex.question_latex.replace(/\$\$?[^$]*\$\$?/g, "…").replace(/\s+/g, " ").trim().slice(0, 90);
 
   async function populate() {
     setPopulating(true);
@@ -263,93 +275,105 @@ function ExerciseCard({ ex, secret, onDelete, onPopulated }: {
   }
 
   return (
-    <Card>
-      <CardContent className="pt-4 pb-3 space-y-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="outline">{ex.topic_id.replace(/_/g, " ")}</Badge>
-          <Badge variant="secondary">{DIFFICULTY_LABELS[ex.difficulty]}</Badge>
-          <Badge variant="outline" className="text-xs">{ex.source}</Badge>
-          {ex.engineering !== "tutti" && <Badge variant="outline" className="text-xs">{ex.engineering}</Badge>}
-          {ex.section !== "tutti" && <Badge variant="outline" className="text-xs">Scaglione {ex.section}</Badge>}
-          {/* Answers status */}
+    <div className="rounded-xl border bg-card">
+      {/* ── Compact row (always visible) ─────────────────────── */}
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        {/* Expand toggle */}
+        <button
+          onClick={() => { setExpanded(!expanded); setEditing(false); }}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+        >
+          <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
+          <span className="text-xs text-muted-foreground truncate flex-1">{preview || ex.topic_id}</span>
+        </button>
+
+        {/* Badges */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Badge variant="outline" className="text-[11px] px-1.5 py-0">{ex.topic_id.replace(/_/g, " ")}</Badge>
+          <Badge variant="secondary" className="text-[11px] px-1.5 py-0">{DIFFICULTY_LABELS[ex.difficulty]}</Badge>
           {hasAnswers ? (
-            <Badge className="text-xs bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-200">
-              ✓ {ex.answers!.length} {ex.answers!.length === 1 ? "risposta" : "risposte"}
+            <Badge className="text-[11px] px-1.5 py-0 bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-200">
+              ✓
             </Badge>
           ) : (
-            <Badge variant="outline" className="text-xs text-orange-600 border-orange-400">
-              ⚠ Da popolare
-            </Badge>
+            <Badge variant="outline" className="text-[11px] px-1.5 py-0 text-orange-600 border-orange-400">⚠</Badge>
           )}
-          <div className="ml-auto flex gap-1">
-            <button
-              onClick={populate}
-              disabled={populating}
-              title="Auto-popola con AI"
-              className="p-1.5 rounded hover:bg-muted disabled:opacity-50"
-            >
-              {populating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4 text-amber-500" />}
-            </button>
-            <button onClick={() => setEditing(!editing)} className="p-1.5 rounded hover:bg-muted">
-              {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-            </button>
-            <button onClick={del} className="p-1.5 rounded hover:bg-red-50 text-red-500"><Trash2 className="h-4 w-4" /></button>
-          </div>
         </div>
-        {/* Show answers inline when populated */}
-        {hasAnswers && !editing && (
-          <div className="flex flex-wrap gap-2">
-            {ex.answers!.map((a, i) => (
-              <div key={i} className="flex items-center gap-1.5 text-xs bg-muted/60 rounded-lg px-2.5 py-1.5">
-                <span className="font-medium text-muted-foreground">{a.label}:</span>
-                {a.type === "exact" ? (
-                  <span className="font-mono">{a.value}</span>
-                ) : (
-                  <span className="italic text-muted-foreground">risposta aperta</span>
-                )}
+
+        {/* Action buttons */}
+        <div className="flex gap-0.5 shrink-0">
+          <button onClick={populate} disabled={populating} title="Auto-popola" className="p-1 rounded hover:bg-muted disabled:opacity-50">
+            {populating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5 text-amber-500" />}
+          </button>
+          <button onClick={del} className="p-1 rounded hover:bg-red-50 text-red-500">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Expanded content ──────────────────────────────────── */}
+      {expanded && (
+        <div className="border-t px-4 py-3 space-y-3">
+          {/* Answers */}
+          {hasAnswers && (
+            <div className="flex flex-wrap gap-2">
+              {ex.answers!.map((a, i) => (
+                <div key={i} className="flex items-center gap-1.5 text-xs bg-muted/60 rounded-lg px-2.5 py-1.5">
+                  <span className="font-medium text-muted-foreground">{a.label}:</span>
+                  {a.type === "exact"
+                    ? <span className="font-mono">{a.value}</span>
+                    : <span className="italic text-muted-foreground">risposta aperta</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {editing ? (
+            <div className="space-y-3">
+              <Field label="Domanda (LaTeX)">
+                <textarea className="w-full border rounded-md px-3 py-2 text-sm font-mono min-h-24 resize-y"
+                  value={form.question_latex} onChange={(e) => setForm({ ...form, question_latex: e.target.value })} />
+              </Field>
+              <Field label="Soluzione (LaTeX)">
+                <textarea className="w-full border rounded-md px-3 py-2 text-sm font-mono min-h-32 resize-y"
+                  value={form.solution_latex} onChange={(e) => setForm({ ...form, solution_latex: e.target.value })} />
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Difficoltà">
+                  <NativeSelect value={String(form.difficulty)} onChange={(v) => setForm({ ...form, difficulty: parseInt(v) })}
+                    options={[{ id: "1", name: "Facile" }, { id: "2", name: "Medio" }, { id: "3", name: "Difficile" }]} />
+                </Field>
+                <Field label="Ingegneria">
+                  <NativeSelect value={form.engineering} onChange={(v) => setForm({ ...form, engineering: v })}
+                    options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))} />
+                </Field>
               </div>
-            ))}
-          </div>
-        )}
-        {editing ? (
-          <div className="space-y-3">
-            <Field label="Domanda (LaTeX)">
-              <textarea className="w-full border rounded-md px-3 py-2 text-sm font-mono min-h-24 resize-y"
-                value={form.question_latex} onChange={(e) => setForm({ ...form, question_latex: e.target.value })} />
-            </Field>
-            <Field label="Soluzione (LaTeX)">
-              <textarea className="w-full border rounded-md px-3 py-2 text-sm font-mono min-h-32 resize-y"
-                value={form.solution_latex} onChange={(e) => setForm({ ...form, solution_latex: e.target.value })} />
-            </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Difficoltà">
-                <NativeSelect value={String(form.difficulty)} onChange={(v) => setForm({ ...form, difficulty: parseInt(v) })}
-                  options={[{ id: "1", name: "Facile" }, { id: "2", name: "Medio" }, { id: "3", name: "Difficile" }]} />
-              </Field>
-              <Field label="Ingegneria">
-                <NativeSelect value={form.engineering} onChange={(v) => setForm({ ...form, engineering: v })}
-                  options={ENGINEERING_OPTIONS.map((e) => ({ id: e, name: e }))} />
-              </Field>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={save} disabled={saving}>
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}Salva
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Annulla</Button>
+              </div>
             </div>
-            <Button size="sm" onClick={save} disabled={saving}>
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}Salva
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Domanda</p>
-              <MathText text={ex.question_latex} className="text-sm" />
+          ) : (
+            <div className="space-y-2">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Domanda</p>
+                <MathText text={ex.question_latex} className="text-sm" />
+              </div>
+              <Separator />
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Soluzione</p>
+                <MathText text={ex.solution_latex} className="text-sm" />
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                <Pencil className="h-3.5 w-3.5 mr-1" />Modifica
+              </Button>
             </div>
-            <Separator />
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Soluzione</p>
-              <MathText text={ex.solution_latex} className="text-sm" />
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
