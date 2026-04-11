@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export interface Recommendation {
+export interface RecommendationItem {
   exerciseId: string;
   topicId: string;
   reason: string;
+  questionPreview: string; // truncated question_latex for preview
+  isTop: boolean;
+}
+
+function truncatePreview(latex: string, maxChars = 350): string {
+  const clean = latex.replace(/\n+/g, " ").trim();
+  return clean.length > maxChars ? clean.slice(0, maxChars) + "…" : clean;
 }
 
 // GET /api/exercise/recommend?subject=&topicId=&score=&currentExerciseId=
@@ -47,18 +54,14 @@ export async function GET(request: NextRequest) {
   let targetConceptTags: string[] | null = null;
 
   if (score < 50) {
-    // Failed badly → same topic, easier, target weak concepts
     targetTopicId    = currentTopicId;
     targetDifficulty = 1;
-    reason = "Hai avuto difficoltà. Riprova con un esercizio più semplice sullo stesso argomento.";
+    reason = "Hai avuto difficoltà. Riprova con esercizi più semplici sullo stesso argomento.";
   } else if (score < 85) {
-    // Partial → same topic, same difficulty
     targetTopicId = currentTopicId;
-    reason = "Buon lavoro! Consolida questo argomento con un altro esercizio simile.";
+    reason = "Buon lavoro! Consolida questo argomento con altri esercizi simili.";
   } else {
-    // Good → find weakest concept across the subject and target it
     if (masteryMap.size > 0) {
-      // Find the weakest concept (lowest mastery, min 2 attempts)
       const weakestConcept = [...masteryMap.entries()]
         .filter(([c]) => {
           const row = (masteryRows ?? []).find(r => r.concept === c);
@@ -68,21 +71,21 @@ export async function GET(request: NextRequest) {
 
       if (weakestConcept && weakestConcept[1] < 0.65) {
         targetConceptTags = [weakestConcept[0]];
-        reason = `Ottimo risultato! Hai ancora margine su "${weakestConcept[0].replace(/_/g, " ")}" — proviamo a lavorarci.`;
+        reason = `Ottimo! Hai ancora margine su "${weakestConcept[0].replace(/_/g, " ")}" — ecco esercizi mirati.`;
       } else {
         targetDifficulty = 3;
-        reason = "Eccellente! Prova qualcosa di più difficile per continuare a crescere.";
+        reason = "Eccellente! Prova questi esercizi più difficili per continuare a crescere.";
       }
     } else {
       targetDifficulty = 3;
-      reason = "Eccellente! Prova qualcosa di più difficile per continuare a crescere.";
+      reason = "Eccellente! Prova questi esercizi più difficili per continuare a crescere.";
     }
   }
 
-  // 4. Build query
+  // 4. Build query — include question_latex for previews
   let query = supabase
     .from("exercises")
-    .select("id, topic_id, difficulty, concept_tags")
+    .select("id, topic_id, difficulty, concept_tags, question_latex")
     .eq("subject", subject);
 
   if (!targetConceptTags) {
@@ -91,18 +94,21 @@ export async function GET(request: NextRequest) {
   if (targetDifficulty) query = query.eq("difficulty", targetDifficulty);
   if (currentExerciseId) query = query.neq("id", currentExerciseId);
 
-  const { data: candidates } = await query.limit(50);
+  const { data: candidates } = await query.limit(60);
 
   let pool = (candidates ?? []).filter(e => !passedIds.has(e.id));
 
-  // 5. If targeting a concept, score candidates by overlap with weak concepts
+  // 5. Score candidates if targeting a concept
+  type Candidate = { id: string; topic_id: string; difficulty: number; concept_tags: string[] | null; question_latex: string };
+
+  let scoredPool: { e: Candidate; score: number }[];
+
   if (targetConceptTags && pool.length > 0) {
     const targetSet = new Set(targetConceptTags);
-    const scored = pool
+    scoredPool = pool
       .map(e => {
         const tags: string[] = Array.isArray(e.concept_tags) ? e.concept_tags : [];
         const overlap = tags.filter(t => targetSet.has(t)).length;
-        // Also factor in overall concept weakness score
         const weaknessScore = tags.reduce((sum, t) => {
           const m = masteryMap.get(t);
           return sum + (m !== undefined ? 1 - m : 0.5);
@@ -110,42 +116,47 @@ export async function GET(request: NextRequest) {
         return { e, score: overlap * 2 + weaknessScore };
       })
       .sort((a, b) => b.score - a.score);
-
-    // Pick from top candidates with some randomness
-    const top = scored.slice(0, Math.min(5, scored.length));
-    pool = top.map(s => s.e);
+  } else {
+    // Shuffle pool for variety
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    scoredPool = shuffled.map(e => ({ e, score: 0 }));
   }
 
-  // 6. Fallback: any exercise in the subject
-  if (pool.length === 0) {
-    const fullPool = (candidates ?? []);
-    if (fullPool.length === 0) {
-      let fallback = supabase
-        .from("exercises")
-        .select("id, topic_id, difficulty")
-        .eq("subject", subject);
-      if (currentExerciseId) fallback = fallback.neq("id", currentExerciseId);
-      const { data: fb } = await fallback.limit(20);
-      if (!fb || fb.length === 0) return NextResponse.json({ recommendation: null });
-      const pick = fb[Math.floor(Math.random() * fb.length)];
-      return NextResponse.json({
-        recommendation: {
-          exerciseId: pick.id,
-          topicId: pick.topic_id,
-          reason: "Ecco un altro esercizio per continuare ad allenarti.",
-        } satisfies Recommendation,
-      });
+  // 6. Take top 3, trying to vary difficulty or topic slightly
+  const picks: Candidate[] = [];
+  for (const { e } of scoredPool) {
+    if (picks.length >= 3) break;
+    picks.push(e);
+  }
+
+  // 7. If not enough, fill from any subject exercise (excluding current)
+  if (picks.length < 3) {
+    let fallbackQuery = supabase
+      .from("exercises")
+      .select("id, topic_id, difficulty, concept_tags, question_latex")
+      .eq("subject", subject);
+    if (currentExerciseId) fallbackQuery = fallbackQuery.neq("id", currentExerciseId);
+    const { data: fb } = await fallbackQuery.limit(30);
+    const fbPool = (fb ?? [])
+      .filter(e => !passedIds.has(e.id) && !picks.some(p => p.id === e.id))
+      .sort(() => Math.random() - 0.5);
+    for (const e of fbPool) {
+      if (picks.length >= 3) break;
+      picks.push(e);
     }
-    pool = fullPool;
   }
 
-  const pick = pool[Math.floor(Math.random() * pool.length)];
+  if (picks.length === 0) {
+    return NextResponse.json({ recommendations: [] });
+  }
 
-  return NextResponse.json({
-    recommendation: {
-      exerciseId: pick.id,
-      topicId: pick.topic_id,
-      reason,
-    } satisfies Recommendation,
-  });
+  const recommendations: RecommendationItem[] = picks.map((pick, i) => ({
+    exerciseId: pick.id,
+    topicId: pick.topic_id,
+    reason,
+    questionPreview: truncatePreview(pick.question_latex ?? ""),
+    isTop: i === 0,
+  }));
+
+  return NextResponse.json({ recommendations });
 }

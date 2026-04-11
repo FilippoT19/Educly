@@ -18,8 +18,10 @@ import {
   Send,
   Target,
   ChevronDown,
+  Shuffle,
 } from "lucide-react";
 import type { AnswerCheckResult, SolutionStep } from "@/lib/claude";
+import type { RecommendationItem } from "@/app/api/exercise/recommend/route";
 
 interface Topic {
   id: string;
@@ -38,7 +40,8 @@ interface Exercise {
   difficulty: number;
   hints: string[];
   conceptTags?: string[];
-  answerCount?: number; // number of exact answers expected (>1 = multi-part)
+  answerCount?: number;
+  answerLabels?: string[];
 }
 
 type Phase =
@@ -53,13 +56,10 @@ type Phase =
 const DIFFICULTY_LABELS = ["", "Facile", "Medio", "Difficile"];
 const DIFFICULTY_COLORS = ["", "text-green-600", "text-yellow-600", "text-red-600"];
 
-// One step in the cumulative review list
+// ── Step card (step-by-step review) ─────────────────────────────────────────
+
 function StepCard({
-  step,
-  verdict,
-  isCurrent,
-  onYes,
-  onNo,
+  step, verdict, isCurrent, onYes, onNo,
 }: {
   step: SolutionStep;
   verdict: boolean | null;
@@ -75,62 +75,50 @@ function StepCard({
         ? "border-red-300 bg-red-50/60 dark:bg-red-950/60 dark:border-red-800"
         : "border-border bg-card"
     }`}>
-      {/* Header row */}
       <div className="flex items-start gap-3 px-4 pt-4 pb-2">
         <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
-          verdict === true
-            ? "bg-green-600 text-white"
-            : verdict === false
-            ? "bg-red-500 text-white"
-            : isCurrent
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-muted-foreground"
+          verdict === true ? "bg-green-600 text-white"
+          : verdict === false ? "bg-red-500 text-white"
+          : isCurrent ? "bg-primary text-primary-foreground"
+          : "bg-muted text-muted-foreground"
         }`}>
-          {verdict === true
-            ? <CheckCircle className="h-3.5 w-3.5" />
-            : verdict === false
-            ? <XCircle className="h-3.5 w-3.5" />
-            : step.step}
+          {verdict === true ? <CheckCircle className="h-3.5 w-3.5" />
+          : verdict === false ? <XCircle className="h-3.5 w-3.5" />
+          : step.step}
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sm leading-snug">{step.title}</p>
           <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{step.text}</p>
         </div>
       </div>
-
-      {/* Formula */}
       {step.formula && (
         <div className="px-4 pb-2">
           <MathText text={`$$${step.formula}$$`} className="text-center" />
         </div>
       )}
-
-      {/* Yes/No only for current unanswered step */}
       {isCurrent && verdict === null && (
-        <>
-          <div className="mx-4 mb-3 border-t border-border/60 pt-3">
-            <p className="text-xs text-center text-muted-foreground mb-2.5">
-              Hai eseguito questo passaggio correttamente?
-            </p>
-            <div className="flex gap-2">
-              <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={onYes}>
-                Sì, l&apos;ho fatto
-              </Button>
-              <Button size="sm" variant="destructive" className="flex-1" onClick={onNo}>
-                No, non l&apos;ho fatto
-              </Button>
-            </div>
+        <div className="mx-4 mb-3 border-t border-border/60 pt-3">
+          <p className="text-xs text-center text-muted-foreground mb-2.5">
+            Hai eseguito questo passaggio correttamente?
+          </p>
+          <div className="flex gap-2">
+            <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={onYes}>
+              Sì, l&apos;ho fatto
+            </Button>
+            <Button size="sm" variant="destructive" className="flex-1" onClick={onNo}>
+              No, non l&apos;ho fatto
+            </Button>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
 }
 
-// Accordion section in final solution view
+// ── Solution accordion ────────────────────────────────────────────────────────
+
 function SolutionAccordion({ step, missed }: { step: SolutionStep; missed: boolean }) {
   const [open, setOpen] = useState(false);
-
   return (
     <div className={`rounded-xl border ${missed ? "border-red-300 dark:border-red-800" : "border-border"}`}>
       <div className="px-4 pt-4 pb-2">
@@ -142,13 +130,11 @@ function SolutionAccordion({ step, missed }: { step: SolutionStep; missed: boole
         </div>
         <p className="text-xs text-muted-foreground leading-snug">{step.text}</p>
       </div>
-
       {step.formula && (
         <div className="px-4 pb-2">
           <MathText text={`$$${step.formula}$$`} className="text-center" />
         </div>
       )}
-
       {step.detail && (
         <div className="border-t border-border/60">
           <button
@@ -169,6 +155,65 @@ function SolutionAccordion({ step, missed }: { step: SolutionStep; missed: boole
   );
 }
 
+// ── Recommendation card ───────────────────────────────────────────────────────
+
+function RecommendationCard({
+  rec,
+  onStart,
+}: {
+  rec: RecommendationItem;
+  onStart: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className={`rounded-xl border ${
+      rec.isTop
+        ? "border-violet-300 bg-violet-50 dark:bg-violet-950 dark:border-violet-800"
+        : "border-border bg-card"
+    }`}>
+      <div className="px-3 pt-3 pb-2 space-y-1">
+        {rec.isTop ? (
+          <div className="flex items-center gap-1.5">
+            <Target className="h-3 w-3 text-violet-600 shrink-0" />
+            <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wide">
+              Consigliato per te
+            </span>
+          </div>
+        ) : (
+          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Alternativa</p>
+        )}
+        {/* Preview — always visible, clamped */}
+        <div className={`text-xs leading-snug text-foreground/80 ${expanded ? "" : "line-clamp-3"}`}>
+          <MathText text={rec.questionPreview} className="text-xs" />
+        </div>
+      </div>
+
+      {/* Expand toggle */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors border-t border-border/40"
+      >
+        <span>{expanded ? "Comprimi" : "Vedi tutto l'esercizio"}</span>
+        <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </button>
+
+      <div className="px-3 pb-3">
+        <Button
+          size="sm"
+          className={`w-full ${rec.isTop ? "bg-violet-600 hover:bg-violet-700 text-white" : ""}`}
+          variant={rec.isTop ? "default" : "outline"}
+          onClick={onStart}
+        >
+          Inizia questo esercizio
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export function PracticeSession({
   subject,
   subjectName,
@@ -184,23 +229,27 @@ export function PracticeSession({
   initialExerciseId?: string;
   backHref?: string;
 }) {
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase]       = useState<Phase>("idle");
   const [exercise, setExercise] = useState<Exercise | null>(null);
-  const [studentAnswer, setStudentAnswer] = useState("");
-  const [showHints, setShowHints] = useState(false);
-  const [hintsUsed, setHintsUsed] = useState(false);
-  const [error, setError] = useState("");
+
+  // ── Answer state ──────────────────────────────────────────────────────────
+  // studentAnswers[i] = answer for part i (always at least length 1)
+  const [studentAnswers, setStudentAnswers] = useState<string[]>([""]);
+  const [activeAnswerIdx, setActiveAnswerIdx] = useState(0);
+  // Shared ref passed to MathKeyboard — updated to whichever input is focused
+  const mathKbRef = useRef<HTMLInputElement | null>(null);
+
+  const [showHints, setShowHints]   = useState(false);
+  const [hintsUsed, setHintsUsed]   = useState(false);
+  const [error, setError]           = useState("");
   const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
   const [checkResult, setCheckResult] = useState<AnswerCheckResult | null>(null);
 
-  const [stepIndex, setStepIndex] = useState(0);
+  const [stepIndex, setStepIndex]   = useState(0);
   const [stepAnswers, setStepAnswers] = useState<boolean[]>([]);
   const [finalScore, setFinalScore] = useState<number | null>(null);
-  const [recommendation, setRecommendation] = useState<{
-    exerciseId: string; topicId: string; reason: string;
-  } | null>(null);
+  const [recommendations, setRecommendations] = useState<RecommendationItem[]>([]);
 
-  const inputRef = useRef<HTMLInputElement>(null);
   const savedRef = useRef(false);
 
   const successRate =
@@ -213,10 +262,23 @@ export function PracticeSession({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialExerciseId]);
 
+  // Combined answer string for the backend
+  const combinedAnswer = studentAnswers.map(s => s.trim()).filter(Boolean).join(", ");
+
+  // Labels for each answer slot
+  function getAnswerLabels(ex: Exercise): string[] {
+    if (ex.answerLabels && ex.answerLabels.length > 0) return ex.answerLabels;
+    const count = ex.answerCount ?? 1;
+    return Array.from({ length: count }, (_, i) =>
+      count === 1 ? "Risultato" : String.fromCharCode(97 + i) + ")"
+    );
+  }
+
   async function loadExercise(exerciseId?: string) {
     setPhase("loading_exercise");
     setExercise(null);
-    setStudentAnswer("");
+    setStudentAnswers([""]);
+    setActiveAnswerIdx(0);
     setShowHints(false);
     setHintsUsed(false);
     setError("");
@@ -224,7 +286,7 @@ export function PracticeSession({
     setStepIndex(0);
     setStepAnswers([]);
     setFinalScore(null);
-    setRecommendation(null);
+    setRecommendations([]);
     savedRef.current = false;
 
     const res = await fetch("/api/exercise/generate", {
@@ -242,11 +304,14 @@ export function PracticeSession({
     const data = await res.json();
     setCurrentExerciseId(data.id ?? null);
     setExercise(data);
+    // Initialize one slot per exact answer (min 1)
+    const count = Math.max(1, data.answerCount || 1);
+    setStudentAnswers(new Array(count).fill(""));
     setPhase("solving");
   }
 
   async function submitAnswer() {
-    if (!exercise || !studentAnswer.trim()) {
+    if (!exercise || !combinedAnswer) {
       setError("Scrivi la tua risposta prima di inviare.");
       return;
     }
@@ -260,7 +325,7 @@ export function PracticeSession({
         subject,
         topicName: topic.name,
         exerciseText: exercise.text,
-        studentAnswer: studentAnswer.trim(),
+        studentAnswer: combinedAnswer,
         exerciseId: currentExerciseId ?? undefined,
       }),
     });
@@ -280,7 +345,7 @@ export function PracticeSession({
       setFinalScore(score);
       setPhase("solution");
       saveResult(result, score);
-      fetchRecommendation(score);
+      fetchRecommendations(score);
     } else {
       setStepIndex(0);
       setStepAnswers([]);
@@ -299,7 +364,7 @@ export function PracticeSession({
         topicId: topic.id,
         exerciseId: currentExerciseId,
         exerciseText: exercise?.text ?? "",
-        studentAnswer,
+        studentAnswer: combinedAnswer,
         isCorrect: result.isCorrect,
         score,
         difficulty: exercise?.difficulty ?? 1,
@@ -309,7 +374,7 @@ export function PracticeSession({
     }).catch(() => {});
   }
 
-  function fetchRecommendation(score: number) {
+  function fetchRecommendations(score: number) {
     const recUrl = new URL("/api/exercise/recommend", window.location.origin);
     recUrl.searchParams.set("subject", subject);
     recUrl.searchParams.set("topicId", topic.id);
@@ -317,7 +382,7 @@ export function PracticeSession({
     if (currentExerciseId) recUrl.searchParams.set("currentExerciseId", currentExerciseId);
     fetch(recUrl.toString())
       .then(r => r.json())
-      .then(r => { if (r.recommendation) setRecommendation(r.recommendation); })
+      .then(r => { if (r.recommendations) setRecommendations(r.recommendations); })
       .catch(() => {});
   }
 
@@ -335,24 +400,22 @@ export function PracticeSession({
       setFinalScore(score);
       setPhase("done");
       saveResult(checkResult, score);
-      fetchRecommendation(score);
+      fetchRecommendations(score);
     }
   }
 
   const steps: SolutionStep[] = checkResult?.solutionSteps ?? [];
 
-  // Partial score visible while reviewing
   const partialScore = steps.slice(0, stepAnswers.length).reduce(
     (sum, s, i) => sum + (stepAnswers[i] ? s.weight : 0), 0
   );
 
-  // ── Shared sidebar blocks ────────────────────────────────────────────────────
+  // ── Shared UI blocks ──────────────────────────────────────────────────────
 
-  const ScoreCard = ({ score, label, color }: { score: number; label: string; color: "green" | "orange" | "blue" }) => (
-    <Card className={
-      color === "green" ? "border-green-400 bg-green-50 dark:bg-green-950" :
-      color === "orange" ? "border-orange-400 bg-orange-50 dark:bg-orange-950" :
-      "border-border"
+  const ScoreCard = ({ score, label, color }: { score: number; label: string; color: "green" | "orange" }) => (
+    <Card className={color === "green"
+      ? "border-green-400 bg-green-50 dark:bg-green-950"
+      : "border-orange-400 bg-orange-50 dark:bg-orange-950"
     }>
       <CardContent className="pt-4 pb-4 text-center">
         <p className="text-4xl font-bold tracking-tight">{score}</p>
@@ -361,62 +424,72 @@ export function PracticeSession({
     </Card>
   );
 
-  const NextExerciseCard = () => (
-    recommendation ? (
-      <Card className="border-violet-200 bg-violet-50 dark:bg-violet-950 dark:border-violet-800">
-        <CardContent className="pt-4 space-y-3">
-          <div className="flex items-start gap-2">
-            <Target className="h-4 w-4 text-violet-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-semibold text-violet-800 dark:text-violet-200 mb-1">
-                Consigliato per te
-              </p>
-              <p className="text-xs text-violet-700 dark:text-violet-300 leading-snug">
-                {recommendation.reason}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Button
-              size="sm"
-              className="w-full bg-violet-600 hover:bg-violet-700 text-white"
-              onClick={() => loadExercise(recommendation.exerciseId)}
-            >
-              Fai questo esercizio
-            </Button>
-            <Button size="sm" variant="outline" className="w-full" onClick={() => loadExercise()}>
-              Esercizio casuale
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    ) : (
-      <Button className="w-full" onClick={() => loadExercise()}>
-        Prossimo esercizio
-      </Button>
-    )
-  );
-
-  // ── Shared: exercise recap (condensed, shown in left col during feedback) ────
-
-  const ExerciseRecap = () => exercise ? (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <div className="flex items-center gap-2 mb-2">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Esercizio</p>
-        <Badge variant="outline" className={`text-[11px] ${DIFFICULTY_COLORS[exercise.difficulty]}`}>
-          {DIFFICULTY_LABELS[exercise.difficulty]}
-        </Badge>
-      </div>
-      <MathText text={exercise.text} className="text-sm leading-relaxed" />
-      {studentAnswer && (
-        <p className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border/60">
-          La tua risposta: <span className="font-mono">{studentAnswer}</span>
-        </p>
+  // 3 recommendation cards + random button
+  const RecommendationSection = () => (
+    <div className="space-y-2">
+      {recommendations.length > 0 ? (
+        <>
+          {recommendations.length > 1 && (
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-0.5">
+              Esercizi consigliati per te
+            </p>
+          )}
+          {recommendations.map(rec => (
+            <RecommendationCard
+              key={rec.exerciseId}
+              rec={rec}
+              onStart={() => loadExercise(rec.exerciseId)}
+            />
+          ))}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="w-full text-muted-foreground gap-1.5"
+            onClick={() => loadExercise()}
+          >
+            <Shuffle className="h-3.5 w-3.5" />
+            Esercizio casuale
+          </Button>
+        </>
+      ) : (
+        <Button className="w-full" onClick={() => loadExercise()}>
+          Prossimo esercizio
+        </Button>
       )}
     </div>
-  ) : null;
+  );
 
-  // ── Layout: header is shared across all phases ───────────────────────────────
+  const ExerciseRecap = () => {
+    if (!exercise) return null;
+    const labels = getAnswerLabels(exercise);
+    const hasAnswers = studentAnswers.some(a => a.trim());
+    return (
+      <div className="rounded-xl border border-border bg-card px-4 py-3">
+        <div className="flex items-center gap-2 mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Esercizio</p>
+          <Badge variant="outline" className={`text-[11px] ${DIFFICULTY_COLORS[exercise.difficulty]}`}>
+            {DIFFICULTY_LABELS[exercise.difficulty]}
+          </Badge>
+        </div>
+        <MathText text={exercise.text} className="text-sm leading-relaxed" />
+        {hasAnswers && (
+          <div className="text-xs text-muted-foreground mt-2 pt-2 border-t border-border/60 space-y-0.5">
+            <p className="font-medium">
+              {studentAnswers.length === 1 ? "La tua risposta:" : "Le tue risposte:"}
+            </p>
+            {studentAnswers.map((a, i) => a.trim() ? (
+              <p key={i}>
+                {studentAnswers.length > 1 && <span className="font-medium">{labels[i]} </span>}
+                <span className="font-mono">{a}</span>
+              </p>
+            ) : null)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Header ────────────────────────────────────────────────────────────────
 
   const header = (
     <header className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
@@ -441,7 +514,7 @@ export function PracticeSession({
     </header>
   );
 
-  // ── IDLE / LOADING / SOLVING / CORRECTING — single centered column ───────────
+  // ── IDLE / LOADING / SOLVING / CORRECTING ─────────────────────────────────
 
   if (phase === "idle" || phase === "loading_exercise" || phase === "solving" || phase === "correcting") {
     return (
@@ -455,17 +528,17 @@ export function PracticeSession({
               <div>
                 <h2 className="text-lg font-semibold mb-1">Pronto ad allenarti?</h2>
                 <p className="text-muted-foreground text-sm">
-                  L&apos;AI genererà un esercizio calibrato sul tuo livello
+                  Riceverai un esercizio calibrato sul tuo livello
                 </p>
               </div>
-              <Button size="lg" onClick={() => loadExercise()}>Genera esercizio</Button>
+              <Button size="lg" onClick={() => loadExercise()}>Inizia</Button>
             </div>
           )}
 
           {phase === "loading_exercise" && (
             <div className="flex flex-col items-center justify-center flex-1 gap-3">
               <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-              <p className="text-muted-foreground">Generazione esercizio...</p>
+              <p className="text-muted-foreground">Caricamento esercizio...</p>
             </div>
           )}
 
@@ -520,26 +593,60 @@ export function PracticeSession({
 
               <Separator />
 
-              <div className="space-y-2">
-                <div className="flex items-baseline justify-between">
-                  <p className="text-sm font-medium">Risultato finale</p>
-                  {exercise.answerCount && exercise.answerCount > 1 && (
-                    <p className="text-xs text-muted-foreground">
-                      {exercise.answerCount} risposte — separale con virgola, es: <span className="font-mono">2, pi/4</span>
-                    </p>
-                  )}
-                </div>
-                <MathKeyboard inputRef={inputRef} value={studentAnswer} onChange={setStudentAnswer} />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={studentAnswer}
-                  onChange={(e) => setStudentAnswer(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") submitAnswer(); }}
-                  placeholder="Es: 3/4, pi/2, sqrt(2), 0, inf..."
-                  disabled={phase === "correcting"}
-                  className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 font-mono"
+              {/* ── Answer inputs ── */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium">
+                  {studentAnswers.length > 1 ? "Le tue risposte" : "Risultato finale"}
+                </p>
+
+                {/* Shared math keyboard */}
+                <MathKeyboard
+                  inputRef={mathKbRef}
+                  value={studentAnswers[activeAnswerIdx] ?? ""}
+                  onChange={(v) => {
+                    setStudentAnswers(prev => {
+                      const next = [...prev];
+                      next[activeAnswerIdx] = v;
+                      return next;
+                    });
+                  }}
                 />
+
+                {/* One input per answer slot */}
+                <div className="space-y-2">
+                  {studentAnswers.map((val, i) => {
+                    const labels = getAnswerLabels(exercise);
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        {studentAnswers.length > 1 && (
+                          <span className="text-sm font-semibold text-muted-foreground w-6 shrink-0 text-right">
+                            {labels[i]}
+                          </span>
+                        )}
+                        <input
+                          type="text"
+                          value={val}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setStudentAnswers(prev => {
+                              const next = [...prev];
+                              next[i] = v;
+                              return next;
+                            });
+                          }}
+                          onFocus={(e) => {
+                            mathKbRef.current = e.currentTarget;
+                            setActiveAnswerIdx(i);
+                          }}
+                          onKeyDown={(e) => { if (e.key === "Enter" && i === studentAnswers.length - 1) submitAnswer(); }}
+                          placeholder={studentAnswers.length === 1 ? "Es: 3/4, pi/2, sqrt(2)…" : `Risposta ${labels[i]}`}
+                          disabled={phase === "correcting"}
+                          className="flex-1 rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 font-mono"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {error && <p className="text-sm text-destructive text-center">{error}</p>}
@@ -563,32 +670,27 @@ export function PracticeSession({
     );
   }
 
-  // ── SOLUTION / STEP_REVIEW / DONE — two-column layout ───────────────────────
+  // ── SOLUTION / STEP_REVIEW / DONE — two-column layout ────────────────────
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {header}
-
       <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-6">
-        <div className="grid md:grid-cols-[1fr_260px] gap-6 items-start">
+        <div className="grid md:grid-cols-[1fr_280px] gap-6 items-start">
 
-          {/* ── LEFT: main content ───────────────────────────────────────────── */}
+          {/* LEFT */}
           <div className="space-y-4 min-w-0">
             <ExerciseRecap />
 
-            {/* SOLUTION */}
             {phase === "solution" && checkResult && (
               <div className="space-y-3">
                 <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
                   Soluzione
                 </p>
-                {steps.map((s) => (
-                  <SolutionAccordion key={s.step} step={s} missed={false} />
-                ))}
+                {steps.map(s => <SolutionAccordion key={s.step} step={s} missed={false} />)}
               </div>
             )}
 
-            {/* STEP REVIEW */}
             {phase === "step_review" && checkResult && (
               <div className="space-y-3">
                 <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
@@ -607,7 +709,6 @@ export function PracticeSession({
               </div>
             )}
 
-            {/* DONE */}
             {phase === "done" && checkResult && (
               <div className="space-y-3">
                 <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
@@ -620,10 +721,9 @@ export function PracticeSession({
             )}
           </div>
 
-          {/* ── RIGHT: sticky sidebar ────────────────────────────────────────── */}
+          {/* RIGHT — sticky sidebar */}
           <div className="md:sticky md:top-6 space-y-3">
 
-            {/* SOLUTION sidebar */}
             {phase === "solution" && (
               <>
                 <ScoreCard
@@ -631,14 +731,12 @@ export function PracticeSession({
                   label={hintsUsed ? "punti (suggerimenti usati)" : "punti su 100"}
                   color="green"
                 />
-                <NextExerciseCard />
+                <RecommendationSection />
               </>
             )}
 
-            {/* STEP_REVIEW sidebar */}
             {phase === "step_review" && checkResult && (
               <>
-                {/* Wrong answer info */}
                 <Card className="border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800">
                   <CardContent className="pt-4 pb-4">
                     <div className="flex items-center gap-2 mb-1">
@@ -649,8 +747,6 @@ export function PracticeSession({
                     <MathText text={checkResult.correctAnswer} className="text-sm font-medium" />
                   </CardContent>
                 </Card>
-
-                {/* Progress bar */}
                 <Card>
                   <CardContent className="pt-4 pb-4 space-y-2">
                     <div className="flex justify-between text-xs text-muted-foreground">
@@ -659,14 +755,11 @@ export function PracticeSession({
                     </div>
                     <div className="flex gap-1">
                       {steps.map((_, i) => (
-                        <div
-                          key={i}
-                          className={`h-1.5 flex-1 rounded-full transition-colors ${
-                            i < stepAnswers.length
-                              ? stepAnswers[i] ? "bg-green-500" : "bg-red-400"
-                              : i === stepIndex ? "bg-primary" : "bg-muted"
-                          }`}
-                        />
+                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${
+                          i < stepAnswers.length
+                            ? stepAnswers[i] ? "bg-green-500" : "bg-red-400"
+                            : i === stepIndex ? "bg-primary" : "bg-muted"
+                        }`} />
                       ))}
                     </div>
                     <div className="flex justify-between text-xs">
@@ -678,15 +771,10 @@ export function PracticeSession({
               </>
             )}
 
-            {/* DONE sidebar */}
             {phase === "done" && (
               <>
-                <ScoreCard
-                  score={finalScore ?? 0}
-                  label="punti su 100"
-                  color="orange"
-                />
-                <NextExerciseCard />
+                <ScoreCard score={finalScore ?? 0} label="punti su 100" color="orange" />
+                <RecommendationSection />
               </>
             )}
           </div>
