@@ -5,11 +5,35 @@ import { isRateLimited } from "@/lib/rateLimit";
 import type { ExerciseAnswer, SolutionStep, AnswerCheckResult } from "@/lib/claude";
 
 function normalizeAnswer(s: string): string {
-  return s.trim().toLowerCase()
+  return s
+    .trim()
+    .toLowerCase()
+    // Remove all whitespace
     .replace(/\s+/g, "")
+    // LaTeX → symbol
     .replace(/\\pi/g, "π").replace(/\bpi\b/g, "π")
     .replace(/\\infty/g, "∞").replace(/\binfty\b/g, "∞")
-    .replace(/\\frac\{(\d+)\}\{(\d+)\}/g, "$1/$2");
+    // sqrt variants → √
+    .replace(/\\sqrt\{([^}]+)\}/g, "√($1)")
+    .replace(/sqrt\(([^)]+)\)/g, "√($1)")
+    // LaTeX fractions → a/b
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "($1)/($2)")
+    // Remove outer wrapping parens from single terms: (3) → 3
+    .replace(/^\(([^()]+)\)$/, "$1")
+    // Common decimal ↔ fraction equivalences (normalize to fraction form)
+    .replace(/\b0\.5\b/g, "1/2")
+    .replace(/\b0\.25\b/g, "1/4")
+    .replace(/\b0\.75\b/g, "3/4")
+    .replace(/\b0\.1\b/g, "1/10")
+    .replace(/\b0\.2\b/g, "1/5")
+    .replace(/\b0\.333+\b/g, "1/3")
+    .replace(/\b0\.666+\b/g, "2/3")
+    // e^0 = 1
+    .replace(/\be\^0\b/g, "1")
+    .replace(/\be\^\{0\}/g, "1")
+    // Remove LaTeX delimiters if student wraps answer
+    .replace(/^\$+/, "").replace(/\$+$/, "")
+    .replace(/^\\[\(\[]/, "").replace(/\\[\)\]]$/, "");
 }
 
 export async function POST(request: NextRequest) {
@@ -55,20 +79,49 @@ export async function POST(request: NextRequest) {
       const steps = ex?.solution_steps as SolutionStep[] | null;
 
       if (answers && answers.length > 0 && steps && steps.length > 0) {
-        // All answers are exact — check without Claude
         const allExact = answers.every((a) => a.type === "exact");
-        if (allExact) {
-          // For single-answer exercises, compare the student's answer to the first exact answer
-          const expected = answers[0].value ?? "";
-          const isCorrect = normalizeAnswer(studentAnswer) === normalizeAnswer(expected);
-          const correctAnswer = answers.map((a) => a.value ?? "").join(", ");
 
-          const result: AnswerCheckResult = {
-            isCorrect,
-            correctAnswer: `$${correctAnswer}$`,
-            solutionSteps: steps,
-          };
-          return NextResponse.json(result);
+        if (allExact) {
+          if (answers.length === 1) {
+            // Single answer: compare directly
+            const expected = answers[0].value ?? "";
+            const isCorrect =
+              normalizeAnswer(studentAnswer) === normalizeAnswer(expected);
+            const correctAnswerStr = answers.map((a) => a.value ?? "").join(", ");
+
+            const result: AnswerCheckResult = {
+              isCorrect,
+              correctAnswer: `$${correctAnswerStr}$`,
+              solutionSteps: steps,
+            };
+            return NextResponse.json(result);
+          }
+
+          // Multiple exact answers (a, b, c parts):
+          // Try to split student answer and compare each part
+          const parts = studentAnswer
+            .split(/[;,]/)
+            .map((p: string) => p.trim())
+            .filter((p: string) => p.length > 0);
+
+          if (parts.length === answers.length) {
+            const allMatch = answers.every(
+              (a, i) =>
+                normalizeAnswer(parts[i]) === normalizeAnswer(a.value ?? "")
+            );
+            const correctAnswerStr = answers
+              .map((a) => `${a.label}: $${a.value ?? ""}$`)
+              .join(" | ");
+
+            const result: AnswerCheckResult = {
+              isCorrect: allMatch,
+              correctAnswer: correctAnswerStr,
+              solutionSteps: steps,
+            };
+            return NextResponse.json(result);
+          }
+
+          // Parts count mismatch or student wrote everything as one → fall through to Claude
         }
       }
     }

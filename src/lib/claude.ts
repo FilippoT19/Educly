@@ -374,7 +374,7 @@ Il tuo compito:
 1. Identifica le domande dell'esercizio (di solito 1, a volte 2-3 per esercizi con parti a), b), c))
 2. Per ogni domanda: determina se la risposta è "exact" (numero, formula semplice verificabile automaticamente) o "open" (dimostrazione, ragionamento)
 3. Dividi la soluzione in 3-6 passaggi logici con pesi che sommano esattamente 75
-4. Scegli 2-4 concept_tags dalla tassonomia che descrivono i concetti principali testati da questo esercizio
+4. Scegli tutti i concept_tags dalla tassonomia che descrivono concetti genuinamente testati da questo esercizio (tipicamente 2-6, ma possono essere di più per temi d'esame complessi — non aggiungere tag irrilevanti)
 
 Rispondi SOLO in formato JSON:
 {
@@ -404,11 +404,12 @@ Regole:
 - solutionSteps.title e .text: SOLO testo italiano, nessun LaTeX
 - solutionSteps.formula: LaTeX puro senza $ delimitatori
 - I pesi devono sommare esattamente 75
-- conceptTags: SOLO valori dalla tassonomia fornita, nessun tag inventato`;
+- conceptTags: SOLO valori dalla tassonomia fornita, nessun tag inventato
+- conceptTags: aggiungi tutti quelli rilevanti, senza limite artificiale`;
 
   const response = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 2048,
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
     messages: [{ role: "user", content: prompt }],
   });
 
