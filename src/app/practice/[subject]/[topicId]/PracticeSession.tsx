@@ -38,6 +38,7 @@ interface Exercise {
   difficulty: number;
   hints: string[];
   conceptTags?: string[];
+  answerCount?: number; // number of exact answers expected (>1 = multi-part)
 }
 
 type Phase =
@@ -520,7 +521,14 @@ export function PracticeSession({
               <Separator />
 
               <div className="space-y-2">
-                <p className="text-sm font-medium">Risultato finale</p>
+                <div className="flex items-baseline justify-between">
+                  <p className="text-sm font-medium">Risultato finale</p>
+                  {exercise.answerCount && exercise.answerCount > 1 && (
+                    <p className="text-xs text-muted-foreground">
+                      {exercise.answerCount} risposte — separale con virgola, es: <span className="font-mono">2, pi/4</span>
+                    </p>
+                  )}
+                </div>
                 <MathKeyboard inputRef={inputRef} value={studentAnswer} onChange={setStudentAnswer} />
                 <input
                   ref={inputRef}

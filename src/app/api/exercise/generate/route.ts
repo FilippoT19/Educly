@@ -27,6 +27,8 @@ export async function POST(request: NextRequest) {
       .eq("id", exerciseId)
       .single();
     if (!ex) return NextResponse.json({ error: "Esercizio non trovato" }, { status: 404 });
+    const answers = ex.answers || [];
+    const answerCount = Array.isArray(answers) ? answers.filter((a: { type: string }) => a.type === "exact").length : 0;
     return NextResponse.json({
       id: ex.id,
       text: ex.question_latex,
@@ -39,6 +41,7 @@ export async function POST(request: NextRequest) {
       solutionExact: ex.solution_exact || null,
       solutionSteps: ex.solution_steps || [],
       conceptTags: ex.concept_tags || [],
+      answerCount,
     });
   }
 
@@ -95,6 +98,8 @@ export async function POST(request: NextRequest) {
       .from("student_exercise_seen")
       .upsert({ student_id: user.id, exercise_id: picked.id });
 
+    const pickedAnswers = picked.answers || [];
+    const pickedAnswerCount = Array.isArray(pickedAnswers) ? pickedAnswers.filter((a: { type: string }) => a.type === "exact").length : 0;
     return NextResponse.json({
       id: picked.id,
       text: picked.question_latex,
@@ -107,6 +112,7 @@ export async function POST(request: NextRequest) {
       solutionExact: picked.solution_exact || null,
       solutionSteps: picked.solution_steps || [],
       conceptTags: picked.concept_tags || [],
+      answerCount: pickedAnswerCount,
     });
   }
 
