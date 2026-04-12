@@ -19,17 +19,35 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (doc?.doc_type === "libro_teoria") {
     const { data } = await supabase
       .from("theory_lessons")
-      .select("id, lesson_order, title, topic_id")
+      .select("id, lesson_order, title, topic_id, chapter_title")
       .eq("source_document_id", id)
       .order("lesson_order", { ascending: true });
-    return NextResponse.json({ type: "lessons", items: data ?? [] });
+
+    // Group by chapter_title
+    const chapters: Record<string, { items: Array<Record<string, unknown>> }> = {};
+    for (const item of data ?? []) {
+      const ch = item.chapter_title ?? "Senza capitolo";
+      if (!chapters[ch]) chapters[ch] = { items: [] };
+      chapters[ch].items.push(item as Record<string, unknown>);
+    }
+
+    return NextResponse.json({ type: "lessons", chapters });
   } else {
     const { data } = await supabase
       .from("exercises")
-      .select("id, topic_id, difficulty, question_latex, created_at")
+      .select("id, topic_id, difficulty, question_latex, chapter_title, created_at")
       .eq("source_document_id", id)
       .order("created_at", { ascending: true });
-    return NextResponse.json({ type: "exercises", items: data ?? [] });
+
+    // Group by chapter_title
+    const chapters: Record<string, { items: Array<Record<string, unknown>> }> = {};
+    for (const item of data ?? []) {
+      const ch = item.chapter_title ?? "Senza capitolo";
+      if (!chapters[ch]) chapters[ch] = { items: [] };
+      chapters[ch].items.push(item as Record<string, unknown>);
+    }
+
+    return NextResponse.json({ type: "exercises", chapters });
   }
 }
 
@@ -37,7 +55,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if (request.headers.get("x-admin-secret") !== ADMIN_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { id } = await params;
+  const { id: _id } = await params;
   const { itemId, itemType } = await request.json();
   const supabase = createAdminClient();
 

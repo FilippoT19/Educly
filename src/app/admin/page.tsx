@@ -405,10 +405,11 @@ export default function AdminPage() {
   const [createError, setCreateError] = useState("");
 
   // Book content viewer
-  const [contentItems, setContentItems] = useState<Array<Record<string, unknown>>>([]);
+  const [contentChapters, setContentChapters] = useState<Record<string, { items: Array<Record<string, unknown>> }>>({});
   const [contentType, setContentType] = useState<"lessons" | "exercises">("exercises");
   const [loadingContent, setLoadingContent] = useState(false);
   const [detailTab, setDetailTab] = useState<"upload" | "content">("upload");
+  const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
 
   // Chapter upload (detail view)
   const [chTitle, setChTitle] = useState("");
@@ -531,7 +532,7 @@ export default function AdminPage() {
     setDetailBook(book);
     setChTitle(""); setChIndex(""); setChTotal(""); setChFile(null);
     setChStatus("idle"); setChMsg(""); setProcessed([]);
-    setDetailTab("upload"); setContentItems([]); setLoadingContent(false);
+    setDetailTab("upload"); setContentChapters({}); setExpandedChapters({}); setLoadingContent(false);
   }
 
   async function loadBookContent(bookId: string) {
@@ -539,7 +540,11 @@ export default function AdminPage() {
     const res = await fetch(`/api/admin/books/${bookId}/content`, { headers: { "x-admin-secret": secret } });
     const data = await res.json();
     setContentType(data.type);
-    setContentItems(data.items ?? []);
+    setContentChapters(data.chapters ?? {});
+    // Auto-expand all chapters
+    const expanded: Record<string, boolean> = {};
+    Object.keys(data.chapters ?? {}).forEach((ch) => { expanded[ch] = true; });
+    setExpandedChapters(expanded);
     setLoadingContent(false);
   }
 
@@ -550,7 +555,13 @@ export default function AdminPage() {
       headers: { "content-type": "application/json", "x-admin-secret": secret },
       body: JSON.stringify({ itemId, itemType }),
     });
-    setContentItems((prev) => prev.filter((i) => i.id !== itemId));
+    setContentChapters((prev) => {
+      const next = { ...prev };
+      for (const ch of Object.keys(next)) {
+        next[ch] = { items: next[ch].items.filter((i) => i.id !== itemId) };
+      }
+      return next;
+    });
   }
 
   async function uploadToStorage(file: File, label: string): Promise<string> {
@@ -889,7 +900,7 @@ export default function AdminPage() {
                   key={tab}
                   onClick={() => {
                     setDetailTab(tab);
-                    if (tab === "content" && detailBook && contentItems.length === 0) {
+                    if (tab === "content" && detailBook && Object.keys(contentChapters).length === 0) {
                       loadBookContent(detailBook.id);
                     }
                   }}
@@ -992,7 +1003,7 @@ export default function AdminPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold">
-                    {loadingContent ? "Caricamento…" : `${contentItems.length} ${contentType === "lessons" ? "lezioni" : "esercizi"}`}
+                    {loadingContent ? "Caricamento…" : `${Object.keys(contentChapters).length} capitoli`}
                   </p>
                   <Button size="sm" variant="outline" onClick={() => detailBook && loadBookContent(detailBook.id)}>
                     Aggiorna
@@ -1000,37 +1011,60 @@ export default function AdminPage() {
                 </div>
                 {loadingContent ? (
                   <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-                ) : contentItems.length === 0 ? (
+                ) : Object.keys(contentChapters).length === 0 ? (
                   <div className="text-center py-8 text-sm text-muted-foreground">Nessun contenuto ancora caricato.</div>
                 ) : (
                   <div className="space-y-2">
-                    {contentItems.map((item) => (
-                      <div key={item.id as string} className="flex items-start gap-3 bg-card border rounded-xl px-4 py-3">
-                        <div className="flex-1 min-w-0">
-                          {contentType === "lessons" ? (
-                            <>
-                              <p className="text-sm font-medium truncate">{item.title as string}</p>
-                              <p className="text-xs text-muted-foreground">{item.topic_id as string} · lezione {item.lesson_order as number}</p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-xs text-muted-foreground mb-1">
-                                {item.topic_id as string} ·{" "}
-                                <span className={item.difficulty === 0 ? "text-blue-400" : item.difficulty === 1 ? "text-green-400" : item.difficulty === 2 ? "text-yellow-400" : "text-red-400"}>
-                                  {DIFFICULTY_LABELS[item.difficulty as number] ?? "—"}
-                                </span>
-                              </p>
-                              <p className="text-sm line-clamp-2 font-mono text-xs text-muted-foreground">{item.question_latex as string}</p>
-                            </>
-                          )}
-                        </div>
+                    {Object.entries(contentChapters).map(([chapterTitle, { items }]) => (
+                      <div key={chapterTitle} className="border rounded-xl overflow-hidden">
+                        {/* Chapter header */}
                         <button
-                          onClick={() => deleteItem(item.id as string, contentType === "lessons" ? "lesson" : "exercise")}
-                          className="shrink-0 p-1.5 text-muted-foreground hover:text-destructive transition-colors rounded-lg hover:bg-destructive/10"
-                          title="Elimina"
+                          onClick={() => setExpandedChapters((prev) => ({ ...prev, [chapterTitle]: !prev[chapterTitle] }))}
+                          className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <div>
+                            <p className="text-sm font-semibold">{chapterTitle}</p>
+                            <p className="text-xs text-muted-foreground">{items.length} {contentType === "lessons" ? "lezioni" : "esercizi"}</p>
+                          </div>
+                          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expandedChapters[chapterTitle] ? "rotate-180" : ""}`} />
                         </button>
+
+                        {/* Items */}
+                        {expandedChapters[chapterTitle] && (
+                          <div className="divide-y divide-border/40">
+                            {items.length === 0 ? (
+                              <p className="text-xs text-muted-foreground px-4 py-3">Nessun elemento estratto.</p>
+                            ) : items.map((item) => (
+                              <div key={item.id as string} className="flex items-start gap-3 px-4 py-3">
+                                <div className="flex-1 min-w-0">
+                                  {contentType === "lessons" ? (
+                                    <>
+                                      <p className="text-sm font-medium truncate">{item.title as string}</p>
+                                      <p className="text-xs text-muted-foreground">{item.topic_id as string} · lezione {item.lesson_order as number}</p>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <p className="text-xs text-muted-foreground mb-1">
+                                        {item.topic_id as string} ·{" "}
+                                        <span className={item.difficulty === 0 ? "text-blue-400" : item.difficulty === 1 ? "text-green-400" : item.difficulty === 2 ? "text-yellow-400" : "text-red-400"}>
+                                          {DIFFICULTY_LABELS[item.difficulty as number] ?? "—"}
+                                        </span>
+                                      </p>
+                                      <p className="text-xs font-mono text-muted-foreground line-clamp-2">{item.question_latex as string}</p>
+                                    </>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => deleteItem(item.id as string, contentType === "lessons" ? "lesson" : "exercise")}
+                                  className="shrink-0 p-1.5 text-muted-foreground hover:text-destructive transition-colors rounded-lg hover:bg-destructive/10"
+                                  title="Elimina"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

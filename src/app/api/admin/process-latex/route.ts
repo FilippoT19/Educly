@@ -162,6 +162,7 @@ ${cleanedLatex}
             title: l.title, content_markdown: l.content_markdown,
             key_concepts: l.key_concepts, mini_quiz: l.mini_quiz,
             engineering, section, source_document_id: sourceDocumentId,
+            chapter_title: chapterTitle,
           }))
         );
       }
@@ -201,6 +202,7 @@ ${cleanedLatex}
           engineering,
           section,
           source_document_id: sourceDocumentId,
+          chapter_title: chapterTitle,
         };
       });
 
