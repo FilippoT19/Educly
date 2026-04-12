@@ -29,10 +29,11 @@ export async function updateSession(request: NextRequest) {
 
   // Protect routes
   const isAuthPage = request.nextUrl.pathname.startsWith('/login') ||
-    request.nextUrl.pathname.startsWith('/signup') ||
-    request.nextUrl.pathname.startsWith('/onboarding')
+    request.nextUrl.pathname.startsWith('/signup')
 
-  if (!user && !isAuthPage && request.nextUrl.pathname !== '/') {
+  const isOnboarding = request.nextUrl.pathname.startsWith('/onboarding')
+
+  if (!user && !isAuthPage && !isOnboarding && request.nextUrl.pathname !== '/') {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
