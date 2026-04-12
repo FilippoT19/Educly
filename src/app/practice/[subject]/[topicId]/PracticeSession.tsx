@@ -76,18 +76,20 @@ function StepCard({
   onNo?: () => void;
 }) {
   return (
-    <div className={`rounded-xl border transition-colors ${
+    <div className={`rounded-2xl border transition-all ${
       verdict === true
-        ? "border-green-300 bg-green-50/60 dark:bg-green-950/60 dark:border-green-800"
+        ? "border-green-500/30 bg-green-500/5"
         : verdict === false
-        ? "border-red-300 bg-red-50/60 dark:bg-red-950/60 dark:border-red-800"
-        : "border-border bg-card"
+        ? "border-red-500/30 bg-red-500/5"
+        : isCurrent
+        ? "border-primary/40 bg-primary/5"
+        : "border-border/50 bg-card"
     }`}>
-      <div className="flex items-start gap-3 px-4 pt-4 pb-2">
-        <div className={`shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${
-          verdict === true ? "bg-green-600 text-white"
-          : verdict === false ? "bg-red-500 text-white"
-          : isCurrent ? "bg-primary text-primary-foreground"
+      <div className="flex items-start gap-3 px-4 pt-4 pb-3">
+        <div className={`shrink-0 mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${
+          verdict === true ? "bg-green-500/20 text-green-400"
+          : verdict === false ? "bg-red-500/20 text-red-400"
+          : isCurrent ? "bg-primary/20 text-primary"
           : "bg-muted text-muted-foreground"
         }`}>
           {verdict === true ? <CheckCircle className="h-3.5 w-3.5" />
@@ -100,20 +102,20 @@ function StepCard({
         </div>
       </div>
       {step.formula && (
-        <div className="px-4 pb-2">
+        <div className="px-4 pb-3">
           <MathText text={`$$${step.formula}$$`} className="text-center" />
         </div>
       )}
       {isCurrent && verdict === null && (
-        <div className="mx-4 mb-3 border-t border-border/60 pt-3">
-          <p className="text-xs text-center text-muted-foreground mb-2.5">
+        <div className="mx-4 mb-4 border-t border-border/40 pt-3">
+          <p className="text-xs text-center text-muted-foreground mb-3">
             Hai eseguito questo passaggio correttamente?
           </p>
           <div className="flex gap-2">
-            <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white" onClick={onYes}>
+            <Button size="sm" className="flex-1 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20" variant="ghost" onClick={onYes}>
               Sì, l&apos;ho fatto
             </Button>
-            <Button size="sm" variant="destructive" className="flex-1" onClick={onNo}>
+            <Button size="sm" className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20" variant="ghost" onClick={onNo}>
               No, non l&apos;ho fatto
             </Button>
           </div>
@@ -128,12 +130,12 @@ function StepCard({
 function SolutionAccordion({ step, missed }: { step: SolutionStep; missed: boolean }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className={`rounded-xl border ${missed ? "border-red-300 dark:border-red-800" : "border-border"}`}>
+    <div className={`rounded-2xl border ${missed ? "border-red-500/30 bg-red-500/5" : "border-border/50 bg-card"}`}>
       <div className="px-4 pt-4 pb-2">
         <div className="flex items-center gap-2 mb-0.5">
           {missed
-            ? <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-            : <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />}
+            ? <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+            : <CheckCircle className="h-3.5 w-3.5 text-green-400 shrink-0" />}
           <p className="font-semibold text-sm">{step.title}</p>
         </div>
         <p className="text-xs text-muted-foreground leading-snug">{step.text}</p>
@@ -144,7 +146,7 @@ function SolutionAccordion({ step, missed }: { step: SolutionStep; missed: boole
         </div>
       )}
       {step.detail && (
-        <div className="border-t border-border/60">
+        <div className="border-t border-border/40">
           <button
             onClick={() => setOpen(!open)}
             className="w-full flex items-center justify-between px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -175,45 +177,41 @@ function RecommendationCard({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className={`rounded-xl border ${
+    <div className={`rounded-2xl border ${
       rec.isTop
-        ? "border-violet-300 bg-violet-50 dark:bg-violet-950 dark:border-violet-800"
-        : "border-border bg-card"
+        ? "border-primary/30 bg-primary/5"
+        : "border-border/50 bg-card"
     }`}>
-      <div className="px-3 pt-3 pb-2 space-y-1">
-        {rec.isTop ? (
+      <div className="px-4 pt-4 pb-2 space-y-2">
+        {rec.isTop && (
           <div className="flex items-center gap-1.5">
-            <Target className="h-3 w-3 text-violet-600 shrink-0" />
-            <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wide">
-              Consigliato per te
+            <Target className="h-3 w-3 text-primary shrink-0" />
+            <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
+              Consigliato
             </span>
           </div>
-        ) : (
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Alternativa</p>
         )}
-        {/* Preview — always visible, clamped */}
-        <div className={`text-xs leading-snug text-foreground/80 ${expanded ? "" : "line-clamp-3"}`}>
+        <div className={`text-xs leading-snug text-foreground/70 ${expanded ? "" : "line-clamp-3"}`}>
           <MathText text={rec.questionPreview} className="text-xs" />
         </div>
       </div>
 
-      {/* Expand toggle */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors border-t border-border/40"
+        className="w-full flex items-center justify-between px-4 py-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors border-t border-border/30"
       >
-        <span>{expanded ? "Comprimi" : "Vedi tutto l'esercizio"}</span>
+        <span>{expanded ? "Comprimi" : "Vedi tutto"}</span>
         <ChevronDown className={`h-3 w-3 transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button>
 
-      <div className="px-3 pb-3">
+      <div className="px-4 pb-4 pt-2">
         <Button
           size="sm"
-          className={`w-full ${rec.isTop ? "bg-violet-600 hover:bg-violet-700 text-white" : ""}`}
+          className="w-full"
           variant={rec.isTop ? "default" : "outline"}
           onClick={onStart}
         >
-          Inizia questo esercizio
+          Inizia
         </Button>
       </div>
     </div>
@@ -425,15 +423,16 @@ export function PracticeSession({
   // ── Shared UI blocks ──────────────────────────────────────────────────────
 
   const ScoreCard = ({ score, label, color }: { score: number; label: string; color: "green" | "orange" }) => (
-    <Card className={color === "green"
-      ? "border-green-400 bg-green-50 dark:bg-green-950"
-      : "border-orange-400 bg-orange-50 dark:bg-orange-950"
-    }>
-      <CardContent className="pt-4 pb-4 text-center">
-        <p className="text-4xl font-bold tracking-tight">{score}</p>
-        <p className="text-xs text-muted-foreground mt-1">{label}</p>
-      </CardContent>
-    </Card>
+    <div className={`rounded-2xl border p-5 text-center ${
+      color === "green"
+        ? "border-green-500/30 bg-green-500/5"
+        : "border-orange-500/30 bg-orange-500/5"
+    }`}>
+      <p className={`text-5xl font-bold tracking-tight ${color === "green" ? "text-green-400" : "text-orange-400"}`}>
+        {score}
+      </p>
+      <p className="text-xs text-muted-foreground mt-1.5">{label}</p>
+    </div>
   );
 
   // 3 recommendation cards + random button
@@ -504,22 +503,22 @@ export function PracticeSession({
   // ── Header ────────────────────────────────────────────────────────────────
 
   const header = (
-    <header className="border-b px-4 py-3 flex items-center gap-3 shrink-0">
+    <header className="border-b border-border/50 px-4 py-3 flex items-center gap-3 shrink-0 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
       <Link
         href={backHref ?? `/course/${subject}`}
-        className="inline-flex items-center justify-center rounded-lg size-8 hover:bg-muted transition-colors"
+        className="inline-flex items-center justify-center rounded-xl size-8 hover:bg-white/5 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
       </Link>
       <div className="flex-1">
-        <p className="text-xs text-muted-foreground">{subjectName}</p>
-        <h1 className="font-semibold leading-tight">{topic.name}</h1>
+        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{subjectName}</p>
+        <h1 className="font-semibold text-[15px] leading-tight">{topic.name}</h1>
       </div>
       {stats && (
         <div className="text-right text-sm">
-          <p className="font-medium">{stats.exercises_done} esercizi</p>
+          <p className="font-semibold">{stats.exercises_done}</p>
           {successRate !== null && (
-            <p className="text-xs text-muted-foreground">{successRate}% corretti</p>
+            <p className="text-[11px] text-muted-foreground">{successRate}%</p>
           )}
         </div>
       )}
