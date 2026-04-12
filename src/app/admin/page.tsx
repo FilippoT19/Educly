@@ -51,7 +51,7 @@ const EXERCISE_SOURCES = [
   { id: "tema_passato", name: "Tema d'esame passato" },
   { id: "dispensa", name: "Dispensa con esercizi" },
 ];
-const DIFFICULTY_LABELS: Record<number, string> = { 1: "Facile", 2: "Medio", 3: "Difficile" };
+const DIFFICULTY_LABELS: Record<number, string> = { 0: "Esempio", 1: "Facile", 2: "Medio", 3: "Difficile" };
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   libro_teoria: "Teoria",
@@ -404,6 +404,12 @@ export default function AdminPage() {
   const [creatingBook, setCreatingBook] = useState(false);
   const [createError, setCreateError] = useState("");
 
+  // Book content viewer
+  const [contentItems, setContentItems] = useState<Array<Record<string, unknown>>>([]);
+  const [contentType, setContentType] = useState<"lessons" | "exercises">("exercises");
+  const [loadingContent, setLoadingContent] = useState(false);
+  const [detailTab, setDetailTab] = useState<"upload" | "content">("upload");
+
   // Chapter upload (detail view)
   const [chTitle, setChTitle] = useState("");
   const [chIndex, setChIndex] = useState("");
@@ -525,6 +531,26 @@ export default function AdminPage() {
     setDetailBook(book);
     setChTitle(""); setChIndex(""); setChTotal(""); setChFile(null);
     setChStatus("idle"); setChMsg(""); setProcessed([]);
+    setDetailTab("upload"); setContentItems([]); setLoadingContent(false);
+  }
+
+  async function loadBookContent(bookId: string) {
+    setLoadingContent(true);
+    const res = await fetch(`/api/admin/books/${bookId}/content`, { headers: { "x-admin-secret": secret } });
+    const data = await res.json();
+    setContentType(data.type);
+    setContentItems(data.items ?? []);
+    setLoadingContent(false);
+  }
+
+  async function deleteItem(itemId: string, itemType: "lesson" | "exercise") {
+    if (!detailBook) return;
+    await fetch(`/api/admin/books/${detailBook.id}/content`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json", "x-admin-secret": secret },
+      body: JSON.stringify({ itemId, itemType }),
+    });
+    setContentItems((prev) => prev.filter((i) => i.id !== itemId));
   }
 
   async function uploadToStorage(file: File, label: string): Promise<string> {
@@ -856,8 +882,28 @@ export default function AdminPage() {
 
             <Separator />
 
+            {/* Tabs */}
+            <div className="flex gap-1 bg-muted/40 p-1 rounded-xl w-fit">
+              {(["upload", "content"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    setDetailTab(tab);
+                    if (tab === "content" && detailBook && contentItems.length === 0) {
+                      loadBookContent(detailBook.id);
+                    }
+                  }}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    detailTab === tab ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {tab === "upload" ? "Carica" : "Contenuto"}
+                </button>
+              ))}
+            </div>
+
             {/* Chapter upload form */}
-            <div className="bg-card border rounded-2xl p-5 space-y-4">
+            {detailTab === "upload" && <div className="bg-card border rounded-2xl p-5 space-y-4">
               <p className="font-semibold text-sm">Aggiungi capitolo</p>
 
               <Field
@@ -921,10 +967,10 @@ export default function AdminPage() {
                   <><Upload className="h-4 w-4 mr-2" />Processa capitolo</>
                 )}
               </Button>
-            </div>
+            </div>}
 
             {/* Processed log */}
-            {processed.length > 0 && (
+            {detailTab === "upload" && processed.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Processati questa sessione
@@ -938,6 +984,57 @@ export default function AdminPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Content tab */}
+            {detailTab === "content" && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">
+                    {loadingContent ? "Caricamento…" : `${contentItems.length} ${contentType === "lessons" ? "lezioni" : "esercizi"}`}
+                  </p>
+                  <Button size="sm" variant="outline" onClick={() => detailBook && loadBookContent(detailBook.id)}>
+                    Aggiorna
+                  </Button>
+                </div>
+                {loadingContent ? (
+                  <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                ) : contentItems.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-muted-foreground">Nessun contenuto ancora caricato.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {contentItems.map((item) => (
+                      <div key={item.id as string} className="flex items-start gap-3 bg-card border rounded-xl px-4 py-3">
+                        <div className="flex-1 min-w-0">
+                          {contentType === "lessons" ? (
+                            <>
+                              <p className="text-sm font-medium truncate">{item.title as string}</p>
+                              <p className="text-xs text-muted-foreground">{item.topic_id as string} · lezione {item.lesson_order as number}</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-xs text-muted-foreground mb-1">
+                                {item.topic_id as string} ·{" "}
+                                <span className={item.difficulty === 0 ? "text-blue-400" : item.difficulty === 1 ? "text-green-400" : item.difficulty === 2 ? "text-yellow-400" : "text-red-400"}>
+                                  {DIFFICULTY_LABELS[item.difficulty as number] ?? "—"}
+                                </span>
+                              </p>
+                              <p className="text-sm line-clamp-2 font-mono text-xs text-muted-foreground">{item.question_latex as string}</p>
+                            </>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => deleteItem(item.id as string, contentType === "lessons" ? "lesson" : "exercise")}
+                          className="shrink-0 p-1.5 text-muted-foreground hover:text-destructive transition-colors rounded-lg hover:bg-destructive/10"
+                          title="Elimina"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

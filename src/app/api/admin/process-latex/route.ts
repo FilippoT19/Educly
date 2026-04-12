@@ -106,22 +106,25 @@ SORGENTE LATEX:
 ${cleanedLatex}
 \`\`\``;
   } else {
-    prompt = `Sei un esperto di ${subjectName} al Politecnico italiano. Ti fornisco il sorgente LaTeX di un documento con esercizi (eserciziario, tema d'esame, o dispensa).
+    prompt = `Sei un esperto di ${subjectName} al Politecnico italiano. Ti fornisco il sorgente LaTeX di un documento con esercizi (eserciziario, tema d'esame, dispensa, oppure capitolo di libro).
 ${contextBlock}
 ${COMMON_RULES}
 
-Analizza il LaTeX e identifica TUTTI gli esercizi con le loro soluzioni. Il LaTeX potrebbe usare ambienti come \\begin{exercise}, \\begin{problem}, \\begin{esercizio}, \\item, oppure sezioni numerate. Cerca anche gli ambienti \\begin{solution}, \\begin{soluzione}, \\begin{svolgimento} per le soluzioni.
+Analizza il LaTeX e identifica TUTTI gli esercizi e gli esempi con le loro soluzioni. Il documento può avere questa struttura tipica:
+- Una sezione iniziale con ESEMPI (ambienti come \\begin{esempio}, \\begin{example}, \\begin{es}, oppure testo "Esempio X.Y" o "Es.") — questi sono esempi guidati con soluzione inclusa
+- Una sezione con ESERCIZI numerati (ambienti come \\begin{esercizio}, \\begin{exercise}, \\begin{problema}, \\item in enumerate, oppure numerazione tipo "1.", "Esercizio 1")
+- Una sezione SOLUZIONI in fondo (ambienti \\begin{solution}, \\begin{soluzione}, \\begin{svolgimento}, oppure testo "Soluzione" / "Sol.") — abbinala all'esercizio corrispondente per numero
 
-Per ogni esercizio:
+Per ogni elemento estratto:
 - topic_id: uno tra ${topicIds.join(", ")}
-- difficulty: 1 (facile), 2 (medio), 3 (difficile)
+- difficulty: 0 (esempio guidato), 1 (facile), 2 (medio), 3 (difficile) — usa 0 per gli esempi della sezione iniziale, stima 1/2/3 per gli esercizi numerati
 - question_latex: testo completo della domanda. Testo in italiano semplice, formule in LaTeX.
-- solution_latex: soluzione completa passo-passo in italiano. Se presente nel LaTeX usala; altrimenti costruiscila tu.
+- solution_latex: soluzione completa passo-passo in italiano. Per gli esempi usala dal testo; per gli esercizi abbinala dalla sezione soluzioni se presente, altrimenti costruiscila tu.
 - hints: array di 2-3 suggerimenti strategici in italiano
 - tags: array di 2-5 micro-argomenti in italiano es. ["integrazione per parti", "cambio di variabile", "teorema di Stokes"]
 
 Rispondi SOLO con un array JSON valido:
-[{ "topic_id":"...", "difficulty":2, "question_latex":"...", "solution_latex":"...", "hints":["..."], "tags":["..."] }]
+[{ "topic_id":"...", "difficulty":0, "question_latex":"...", "solution_latex":"...", "hints":["..."], "tags":["..."] }]
 
 SORGENTE LATEX:
 \`\`\`latex

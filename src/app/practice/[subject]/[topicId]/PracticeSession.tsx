@@ -61,8 +61,8 @@ type Phase =
   | "step_review"
   | "done";
 
-const DIFFICULTY_LABELS = ["", "Facile", "Medio", "Difficile"];
-const DIFFICULTY_COLORS = ["", "text-green-600", "text-yellow-600", "text-red-600"];
+const DIFFICULTY_LABELS = ["Esempio", "Facile", "Medio", "Difficile"];
+const DIFFICULTY_COLORS = ["text-blue-500", "text-green-500", "text-yellow-500", "text-red-500"];
 
 // ── Step card (step-by-step review) ─────────────────────────────────────────
 
