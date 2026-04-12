@@ -233,6 +233,69 @@ function parseEsempi(lines: string[], start: number, end: number): Array<{ numbe
   }));
 }
 
+/**
+ * Split an esempio text into Q+A parts.
+ *
+ * Esempi structure: labels appear TWICE — first occurrence = question, second = solution.
+ * Supports both "a. " style (Esempio 1.1, 1.2) and "(a) " style (Esempio 1.3, 1.4).
+ * Text before the first label = shared preamble (the exercise description).
+ */
+function splitEsempioIntoParts(text: string): { preamble: string; parts: Part[] } {
+  const lines = text.split("\n");
+  // Strip the "Esempio X.X." header line from the preamble
+  const contentLines = lines[0].match(ESEMPIO_RE) ? lines.slice(1) : lines;
+
+  const preambleLines: string[] = [];
+  const segments: Array<{ label: string; lines: string[] }> = [];
+  let current: { label: string; lines: string[] } | null = null;
+  let inMath = false;
+
+  for (const line of contentLines) {
+    if (line.trim() === "$$") inMath = !inMath;
+
+    let label: string | null = null;
+    if (!inMath) {
+      // "a. " style: label alone at start of line
+      const m1 = line.match(/^([a-e])\.\s/);
+      // "(a) " style: label in parentheses — allow trailing space OR end-of-line
+      const m2 = line.match(/^\(([a-e])\)(\s|$)/);
+      if (m1) label = m1[1];
+      else if (m2) label = m2[1];
+    }
+
+    if (label) {
+      if (current) segments.push(current);
+      current = { label, lines: [line] };
+    } else if (current) {
+      current.lines.push(line);
+    } else {
+      preambleLines.push(line);
+    }
+  }
+  if (current) segments.push(current);
+
+  // First occurrence = question, second = solution
+  const questions = new Map<string, string>();
+  const solutions = new Map<string, string>();
+
+  for (const seg of segments) {
+    const segText = seg.lines.join("\n").trim();
+    if (!questions.has(seg.label)) {
+      questions.set(seg.label, segText);
+    } else {
+      solutions.set(seg.label, segText);
+    }
+  }
+
+  const parts: Part[] = [...questions.keys()].map((lbl) => ({
+    label: lbl,
+    question_latex: questions.get(lbl)!,
+    solution_latex: solutions.get(lbl) ?? null,
+  }));
+
+  return { preamble: preambleLines.join("\n").trim(), parts };
+}
+
 // ── Parse numbered exercises or applications ───────────────────────────────────
 
 interface RawExercise {
@@ -386,81 +449,33 @@ function buildItems(
   });
 }
 
-/** Esempi are stored as single-block items (no part splitting — Q+A interleaved). */
+/** Esempi: split into Q+A parts using the repeating-label pattern. */
 function buildEsempiItems(
   rawEsempi: Array<{ number: string; text: string }>,
   subtopic_id: string | null
 ): ParsedItem[] {
-  return rawEsempi.map((e) => ({
-    number: e.number,
-    exercise_type: "esempio" as const,
-    has_star: false,
-    question_latex: e.text,
-    solution_latex: null,
-    parts: [],
-    subtopic_id,
-    application_category: null,
-  }));
+  return rawEsempi.map((e) => {
+    const { preamble, parts } = splitEsempioIntoParts(e.text);
+    return {
+      number: e.number,
+      exercise_type: "esempio" as const,
+      has_star: false,
+      question_latex: preamble,
+      solution_latex: null,
+      parts,
+      subtopic_id,
+      application_category: null,
+    };
+  });
 }
 
-// ── HTML preview ──────────────────────────────────────────────────────────────
+// ── HTML preview (with KaTeX rendering) ──────────────────────────────────────
 
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function generateHtml(items: ParsedItem[], filename: string): string {
-  const typeColor: Record<string, string> = {
-    exercise: "#4ade80",
-    esempio: "#60a5fa",
-    application: "#f59e0b",
-  };
-
-  const rows = items
-    .map((item, i) => {
-      let body: string;
-
-      if (item.parts.length > 0) {
-        const preamble = item.question_latex
-          ? `<div class="preamble"><pre>${escHtml(item.question_latex)}</pre></div>`
-          : "";
-        const partRows = item.parts
-          .map(
-            (p) => `
-          <div class="part">
-            <div class="part-label">Parte ${p.label.toUpperCase()}</div>
-            <div class="cols">
-              <div class="col"><div class="label">DOMANDA</div><pre>${escHtml(p.question_latex)}</pre></div>
-              <div class="col"><div class="label">SOLUZIONE</div><pre>${p.solution_latex ? escHtml(p.solution_latex) : "—"}</pre></div>
-            </div>
-          </div>`
-          )
-          .join("");
-        body = preamble + partRows;
-      } else {
-        body = `
-        <div class="cols">
-          <div class="col"><div class="label">DOMANDA</div><pre>${escHtml(item.question_latex)}</pre></div>
-          <div class="col"><div class="label">SOLUZIONE</div><pre>${item.solution_latex ? escHtml(item.solution_latex) : "—"}</pre></div>
-        </div>`;
-      }
-
-      return `
-    <div class="exercise">
-      <div class="header">
-        <span class="num">#${i + 1}</span>
-        <span class="id">Es. ${item.number}</span>
-        <span class="type" style="color:${typeColor[item.exercise_type]}">${item.exercise_type}${item.has_star ? " ★" : ""}</span>
-        ${item.application_category ? `<span class="cat">${escHtml(item.application_category)}</span>` : ""}
-        ${item.parts.length > 0 ? `<span class="parts-badge">${item.parts.length} parti</span>` : ""}
-        ${item.parts.length === 0 && item.solution_latex ? '<span class="has-sol">✓ sol</span>' : ""}
-        ${item.parts.length === 0 && !item.solution_latex ? '<span class="no-sol">⚠ no sol</span>' : ""}
-      </div>
-      ${body}
-    </div>`;
-    })
-    .join("\n");
-
   const total = items.length;
   const ne = items.filter((x) => x.exercise_type === "esempio").length;
   const nx = items.filter((x) => x.exercise_type === "exercise").length;
@@ -468,44 +483,182 @@ function generateHtml(items: ParsedItem[], filename: string): string {
   const multi = items.filter((x) => x.parts.length > 0).length;
   const starred = items.filter((x) => x.has_star).length;
 
+  // Embed all data as JSON — avoids any HTML escaping issues with raw LaTeX
+  const dataJson = JSON.stringify(items);
+  const filenameJson = JSON.stringify(filename);
+
   return `<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="UTF-8">
 <title>Preview — ${escHtml(filename)}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"></script>
 <style>
-  body { font-family: system-ui, sans-serif; background: #0a0a0a; color: #e5e5e5; padding: 24px; margin: 0; }
-  h1 { font-size: 20px; margin-bottom: 4px; }
-  .meta { color: #888; font-size: 13px; margin-bottom: 24px; line-height: 1.6; }
-  .exercise { border: 1px solid #222; border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
-  .header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #111; border-bottom: 1px solid #222; flex-wrap: wrap; }
-  .num { font-size: 12px; background: #333; border-radius: 6px; padding: 2px 8px; }
-  .id { font-weight: 600; font-size: 14px; }
-  .type { font-size: 12px; font-weight: 600; }
-  .cat { font-size: 11px; color: #888; margin-left: auto; font-style: italic; }
-  .parts-badge { font-size: 11px; color: #a78bfa; }
-  .has-sol { font-size: 11px; color: #4ade80; margin-left: auto; }
-  .no-sol { font-size: 11px; color: #f87171; margin-left: auto; }
-  .preamble { padding: 10px 16px; background: #0d0d0d; border-bottom: 1px solid #1a1a1a; }
-  .part { border-top: 1px solid #1a1a1a; }
-  .part-label { padding: 5px 16px; font-size: 10px; font-weight: 700; color: #666; letter-spacing: .12em; background: #0d0d0d; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; }
-  .col { padding: 14px 16px; }
-  .col:first-child { border-right: 1px solid #1a1a1a; }
-  .label { font-size: 10px; font-weight: 700; letter-spacing: .1em; color: #555; margin-bottom: 8px; }
-  pre { font-family: 'Menlo','Monaco',monospace; font-size: 12px; white-space: pre-wrap; word-break: break-word; color: #ccc; margin: 0; line-height: 1.5; }
+  :root { --bg:#0a0a0a; --bg2:#111; --bg3:#161616; --border:#222; --border2:#1a1a1a; --text:#e5e5e5; --muted:#888; --green:#4ade80; --blue:#60a5fa; --yellow:#f59e0b; --purple:#a78bfa; --red:#f87171; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 24px; margin: 0; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 24px; line-height: 1.8; }
+  .exercise { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+  .header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .num { font-size: 11px; background: #2a2a2a; border-radius: 5px; padding: 2px 8px; color: var(--muted); }
+  .exid { font-weight: 600; font-size: 14px; }
+  .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px; }
+  .badge-ex { background: #0f2e1a; color: var(--green); }
+  .badge-es { background: #0f1e3a; color: var(--blue); }
+  .badge-ap { background: #2e1e0a; color: var(--yellow); }
+  .star { color: #fbbf24; }
+  .cat { font-size: 11px; color: var(--muted); font-style: italic; }
+  .parts-n { font-size: 11px; color: var(--purple); }
+  .sol-ok { font-size: 11px; color: var(--green); margin-left: auto; }
+  .sol-no { font-size: 11px; color: var(--red); margin-left: auto; }
+  .preamble { padding: 14px 16px; background: var(--bg3); border-bottom: 1px solid var(--border2); font-size: 14px; line-height: 1.7; }
+  .part { border-top: 1px solid var(--border2); }
+  .part-label { padding: 4px 16px; font-size: 10px; font-weight: 700; letter-spacing: .12em; color: #555; background: var(--bg3); text-transform: uppercase; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; min-height: 60px; }
+  .col { padding: 14px 16px; font-size: 14px; line-height: 1.7; }
+  .col:first-child { border-right: 1px solid var(--border2); }
+  .col-label { font-size: 9px; font-weight: 700; letter-spacing: .12em; color: #444; margin-bottom: 10px; text-transform: uppercase; }
+  .empty { color: #333; font-style: italic; }
+  img { max-width: 100%; border-radius: 6px; margin: 8px 0; }
+  .katex-display { margin: 0.8em 0; overflow-x: auto; }
+  .katex { font-size: 1em; }
 </style>
 </head>
 <body>
 <h1>Preview — ${escHtml(filename)}</h1>
 <p class="meta">
-  ${total} elementi totali &nbsp;·&nbsp;
-  <span style="color:#60a5fa">${ne} esempi</span> &nbsp;·&nbsp;
-  <span style="color:#4ade80">${nx} esercizi</span> &nbsp;·&nbsp;
-  <span style="color:#f59e0b">${na} applicazioni</span><br>
-  ${multi} multi-parte &nbsp;·&nbsp; ${starred} con stella
+  <strong>${total}</strong> elementi totali &nbsp;·&nbsp;
+  <span style="color:var(--blue)">${ne} esempi</span> &nbsp;·&nbsp;
+  <span style="color:var(--green)">${nx} esercizi</span> &nbsp;·&nbsp;
+  <span style="color:var(--yellow)">${na} applicazioni</span><br>
+  <span style="color:var(--purple)">${multi} multi-parte</span> &nbsp;·&nbsp;
+  <span style="color:#fbbf24">${starred} con stella ★</span>
 </p>
-${rows}
+<div id="app"></div>
+
+<script>
+const DATA = ${dataJson};
+const FILENAME = ${filenameJson};
+
+// Render text containing $$...$$ display math, $...$ inline math, and ![](url) images.
+function renderMath(text) {
+  if (!text) return '<span class="empty">—</span>';
+
+  // Handle images first (preserve them)
+  const IMG_RE = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  const imgPlaceholders = [];
+  text = text.replace(IMG_RE, (_, alt, src) => {
+    imgPlaceholders.push({ alt, src });
+    return '__IMG_' + (imgPlaceholders.length - 1) + '__';
+  });
+
+  // Split by display math $$...$$
+  const parts = text.split(/(\\$\\$[\\s\\S]*?\\$\\$)/g);
+  let html = parts.map(part => {
+    if (part.startsWith('\\$\\$')) {
+      const latex = part.slice(2, -2).trim();
+      try {
+        return katex.renderToString(latex, { displayMode: true, throwOnError: false, trust: true });
+      } catch(e) {
+        return '<code style="color:#f87171">' + esc(part) + '</code>';
+      }
+    }
+    // Split by inline math $...$
+    const inlineParts = part.split(/(\\$[^\\$\\n]+?\\$)/g);
+    return inlineParts.map(ip => {
+      if (ip.startsWith('\\$') && ip.endsWith('\\$') && ip.length > 2) {
+        const latex = ip.slice(1, -1);
+        try {
+          return katex.renderToString(latex, { displayMode: false, throwOnError: false, trust: true });
+        } catch(e) {
+          return '<code style="color:#f87171">' + esc(ip) + '</code>';
+        }
+      }
+      // Plain text: escape HTML and convert newlines
+      return esc(ip).replace(/\\n/g, '<br>');
+    }).join('');
+  }).join('');
+
+  // Restore images
+  imgPlaceholders.forEach((img, i) => {
+    html = html.replace('__IMG_' + i + '__', '<img src="' + img.src + '" alt="' + esc(img.alt) + '">');
+  });
+  return html;
+}
+
+function esc(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function typeInfo(type) {
+  if (type === 'esempio') return { cls: 'badge-es', label: 'Esempio' };
+  if (type === 'application') return { cls: 'badge-ap', label: 'Applicazione' };
+  return { cls: 'badge-ex', label: 'Esercizio' };
+}
+
+function hasSolution(item) {
+  if (item.parts.length > 0) return item.parts.some(p => p.solution_latex);
+  return !!item.solution_latex;
+}
+
+function renderItem(item, index) {
+  const ti = typeInfo(item.exercise_type);
+  const solOk = hasSolution(item);
+
+  let headerExtras = '';
+  if (item.application_category) headerExtras += '<span class="cat">' + esc(item.application_category) + '</span>';
+  if (item.parts.length > 0) headerExtras += '<span class="parts-n">' + item.parts.length + ' parti</span>';
+  headerExtras += solOk
+    ? '<span class="sol-ok" style="margin-left:auto">✓ soluzione</span>'
+    : '<span class="sol-no" style="margin-left:auto">⚠ nessuna soluzione</span>';
+
+  let body = '';
+  if (item.parts.length > 0) {
+    if (item.question_latex) {
+      body += '<div class="preamble">' + renderMath(item.question_latex) + '</div>';
+    }
+    item.parts.forEach(p => {
+      body += '<div class="part">' +
+        '<div class="part-label">Parte ' + p.label.toUpperCase() + '</div>' +
+        '<div class="cols">' +
+          '<div class="col"><div class="col-label">Domanda</div>' + renderMath(p.question_latex) + '</div>' +
+          '<div class="col"><div class="col-label">Soluzione</div>' + renderMath(p.solution_latex) + '</div>' +
+        '</div>' +
+      '</div>';
+    });
+  } else {
+    body = '<div class="cols">' +
+      '<div class="col"><div class="col-label">Domanda</div>' + renderMath(item.question_latex) + '</div>' +
+      '<div class="col"><div class="col-label">Soluzione</div>' + renderMath(item.solution_latex) + '</div>' +
+    '</div>';
+  }
+
+  return '<div class="exercise">' +
+    '<div class="header">' +
+      '<span class="num">#' + (index + 1) + '</span>' +
+      '<span class="exid">Es. ' + esc(item.number) + '</span>' +
+      '<span class="badge ' + ti.cls + '">' + ti.label + '</span>' +
+      (item.has_star ? '<span class="star">★</span>' : '') +
+      headerExtras +
+    '</div>' +
+    body +
+  '</div>';
+}
+
+function init() {
+  document.getElementById('app').innerHTML = DATA.map(renderItem).join('');
+}
+
+// Wait for KaTeX to load
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>
 </body>
 </html>`;
 }
