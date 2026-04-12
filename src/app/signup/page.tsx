@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { identifyUser, trackUserSignedUp } from "@/lib/posthog";
+import { identifyUser, trackUserSignedUp, trackSignupFailed } from "@/lib/posthog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +42,7 @@ export default function SignupPage() {
     const { data, error: signupError } = await supabase.auth.signUp({ email: form.email, password: form.password });
     if (signupError || !data.user) {
       setError(signupError?.message || "Errore durante la registrazione.");
+      trackSignupFailed({ reason: signupError?.message || "auth_error" });
       setLoading(false);
       return;
     }
@@ -51,6 +52,7 @@ export default function SignupPage() {
     });
     if (profileError) {
       setError("Errore nel salvare il profilo. Riprova.");
+      trackSignupFailed({ reason: "profile_creation_error" });
       setLoading(false);
       return;
     }

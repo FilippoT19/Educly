@@ -25,6 +25,14 @@ export function trackGuestLogin() {
   posthog.capture("guest_login");
 }
 
+export function trackLoginFailed(props: { email: string }) {
+  posthog.capture("login_failed", props);
+}
+
+export function trackSignupFailed(props: { reason: string }) {
+  posthog.capture("signup_failed", props);
+}
+
 // ── Exercise practice events ──────────────────────────────────────────────────
 
 export function trackExerciseLoaded(props: {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateExercise } from "@/lib/claude";
 import { isRateLimited } from "@/lib/rateLimit";
+import { getPostHogClient } from "@/lib/posthog-server";
 import analisi1 from "@/content/analisi1.json";
 import analisi2 from "@/content/analisi2.json";
 
@@ -134,6 +135,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ...exercise, text: exercise.text, fromDb: false });
   } catch (err) {
     console.error("Exercise generation error:", err);
+    getPostHogClient().capture({
+      distinctId: user.id,
+      event: "exercise_generation_failed",
+      properties: { subject, topicId },
+    });
     return NextResponse.json({ error: "Errore nella generazione" }, { status: 500 });
   }
 }

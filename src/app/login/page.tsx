@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { identifyUser, trackUserLoggedIn } from "@/lib/posthog";
+import { identifyUser, trackUserLoggedIn, trackLoginFailed } from "@/lib/posthog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,7 @@ export default function LoginPage() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setError("Email o password non corretti.");
+      trackLoginFailed({ email });
       setLoading(false);
       return;
     }

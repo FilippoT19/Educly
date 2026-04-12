@@ -55,6 +55,11 @@ export async function POST(request: NextRequest) {
 
   // 30 corrections per hour per user
   if (isRateLimited(`correct:${user.id}`, 30, 60 * 60 * 1000)) {
+    getPostHogClient().capture({
+      distinctId: user.id,
+      event: "rate_limit_hit",
+      properties: { action: "exercise_correction" },
+    });
     return NextResponse.json(
       { error: "Limite correzioni raggiunto. Riprova tra un po'." },
       { status: 429 }

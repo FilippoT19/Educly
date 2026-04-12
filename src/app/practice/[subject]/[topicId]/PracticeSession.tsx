@@ -22,7 +22,14 @@ import {
 } from "lucide-react";
 import type { AnswerCheckResult, SolutionStep } from "@/lib/claude";
 import type { RecommendationItem } from "@/app/api/exercise/recommend/route";
-import { trackExerciseStarted, trackHintRevealed } from "@/lib/posthog";
+import {
+  trackExerciseStarted,
+  trackHintRevealed,
+  trackExerciseLoaded,
+  trackAnswerSubmitted,
+  trackCorrectionResult,
+  trackRecommendationClicked,
+} from "@/lib/posthog";
 
 interface Topic {
   id: string;
@@ -305,6 +312,7 @@ export function PracticeSession({
     const data = await res.json();
     setCurrentExerciseId(data.id ?? null);
     setExercise(data);
+    trackExerciseLoaded({ subject, topicId: topic.id, difficulty: data.difficulty, fromDb: data.fromDb ?? false });
     // Initialize one slot per exact answer (min 1)
     const count = Math.max(1, data.answerCount || 1);
     setStudentAnswers(new Array(count).fill(""));
@@ -318,6 +326,7 @@ export function PracticeSession({
     }
     setError("");
     setPhase("correcting");
+    trackAnswerSubmitted({ subject, topicId: topic.id, exerciseId: currentExerciseId ?? undefined });
 
     const res = await fetch("/api/exercise/correct", {
       method: "POST",
@@ -345,9 +354,11 @@ export function PracticeSession({
       const score = hintsUsed ? 70 : 100;
       setFinalScore(score);
       setPhase("solution");
+      trackCorrectionResult({ subject, topicId: topic.id, isCorrect: true, score, usedDb: false });
       saveResult(result, score);
       fetchRecommendations(score);
     } else {
+      trackCorrectionResult({ subject, topicId: topic.id, isCorrect: false, score: 0, usedDb: false });
       setStepIndex(0);
       setStepAnswers([]);
       setPhase("step_review");
@@ -439,8 +450,7 @@ export function PracticeSession({
             <RecommendationCard
               key={rec.exerciseId}
               rec={rec}
-              onStart={() => loadExercise(rec.exerciseId)}
-            />
+              onStart={() => { trackRecommendationClicked({ exerciseId: rec.exerciseId, isTop: rec.isTop }); loadExercise(rec.exerciseId); }}
           ))}
           <Button
             size="sm"
