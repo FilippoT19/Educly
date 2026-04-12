@@ -26,6 +26,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import katex from "katex";
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
 
@@ -469,10 +470,54 @@ function buildEsempiItems(
   });
 }
 
-// ── HTML preview (with KaTeX rendering) ──────────────────────────────────────
+// ── HTML preview (server-side KaTeX rendering — no browser JS needed) ─────────
 
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Render a LaTeX+Markdown text block to HTML using KaTeX server-side. */
+function renderMath(text: string | null): string {
+  if (!text) return '<span style="color:#333;font-style:italic">—</span>';
+
+  // Replace ![alt](url) images with placeholders
+  const imgs: Array<{ alt: string; src: string }> = [];
+  let t = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => {
+    imgs.push({ alt, src });
+    return `\x00IMG${imgs.length - 1}\x00`;
+  });
+
+  // Split on display math $$ ... $$
+  const parts = t.split(/((?:\$\$)[\s\S]*?(?:\$\$))/g);
+  let html = parts.map((part) => {
+    if (part.startsWith("$$") && part.endsWith("$$")) {
+      const latex = part.slice(2, -2).trim();
+      try {
+        return katex.renderToString(latex, { displayMode: true, throwOnError: false });
+      } catch {
+        return `<code style="color:#f87171">${escHtml(part)}</code>`;
+      }
+    }
+    // Split on inline math $ ... $
+    const inlineParts = part.split(/(\$[^$\n]+?\$)/g);
+    return inlineParts.map((ip) => {
+      if (ip.startsWith("$") && ip.endsWith("$") && ip.length > 2) {
+        try {
+          return katex.renderToString(ip.slice(1, -1), { displayMode: false, throwOnError: false });
+        } catch {
+          return `<code style="color:#f87171">${escHtml(ip)}</code>`;
+        }
+      }
+      return escHtml(ip).replace(/\n/g, "<br>");
+    }).join("");
+  }).join("");
+
+  // Restore images
+  imgs.forEach((img, i) => {
+    html = html.replace(`\x00IMG${i}\x00`, `<img src="${img.src}" alt="${escHtml(img.alt)}" style="max-width:100%;border-radius:6px;margin:8px 0">`);
+  });
+
+  return html;
 }
 
 function generateHtml(items: ParsedItem[], filename: string): string {
@@ -483,177 +528,101 @@ function generateHtml(items: ParsedItem[], filename: string): string {
   const multi = items.filter((x) => x.parts.length > 0).length;
   const starred = items.filter((x) => x.has_star).length;
 
-  // Embed all data as JSON — avoids any HTML escaping issues with raw LaTeX
-  const dataJson = JSON.stringify(items);
-  const filenameJson = JSON.stringify(filename);
+  // Get KaTeX CSS inline so no CDN is needed
+  const katexCssPath = path.resolve(process.cwd(), "node_modules/katex/dist/katex.min.css");
+  const katexCss = fs.existsSync(katexCssPath) ? fs.readFileSync(katexCssPath, "utf-8") : "";
+
+  const typeLabel: Record<string, string> = { exercise: "Esercizio", esempio: "Esempio", application: "Applicazione" };
+  const typeBadge: Record<string, string> = { exercise: "background:#0f2e1a;color:#4ade80", esempio: "background:#0f1e3a;color:#60a5fa", application: "background:#2e1e0a;color:#f59e0b" };
+
+  function hasSolution(item: ParsedItem): boolean {
+    if (item.parts.length > 0) return item.parts.some((p) => p.solution_latex !== null);
+    return item.solution_latex !== null;
+  }
+
+  function renderPart(p: Part, idx: number): string {
+    return `<div style="border-top:1px solid #1a1a1a">
+      <div style="padding:4px 16px;font-size:10px;font-weight:700;letter-spacing:.12em;color:#555;background:#161616;text-transform:uppercase">Parte ${p.label.toUpperCase()}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr">
+        <div style="padding:14px 16px;border-right:1px solid #1a1a1a;font-size:14px;line-height:1.7">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:#444;margin-bottom:10px;text-transform:uppercase">Domanda</div>
+          ${renderMath(p.question_latex)}
+        </div>
+        <div style="padding:14px 16px;font-size:14px;line-height:1.7">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:#444;margin-bottom:10px;text-transform:uppercase">Soluzione</div>
+          ${renderMath(p.solution_latex)}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderItem(item: ParsedItem, i: number): string {
+    const solOk = hasSolution(item);
+    const headerRight = solOk
+      ? `<span style="font-size:11px;color:#4ade80;margin-left:auto">✓ soluzione</span>`
+      : `<span style="font-size:11px;color:#f87171;margin-left:auto">⚠ nessuna soluzione</span>`;
+
+    let body = "";
+    if (item.parts.length > 0) {
+      if (item.question_latex) {
+        body += `<div style="padding:14px 16px;background:#161616;border-bottom:1px solid #1a1a1a;font-size:14px;line-height:1.7">${renderMath(item.question_latex)}</div>`;
+      }
+      body += item.parts.map(renderPart).join("");
+    } else {
+      body = `<div style="display:grid;grid-template-columns:1fr 1fr">
+        <div style="padding:14px 16px;border-right:1px solid #1a1a1a;font-size:14px;line-height:1.7">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:#444;margin-bottom:10px;text-transform:uppercase">Domanda</div>
+          ${renderMath(item.question_latex)}
+        </div>
+        <div style="padding:14px 16px;font-size:14px;line-height:1.7">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.12em;color:#444;margin-bottom:10px;text-transform:uppercase">Soluzione</div>
+          ${renderMath(item.solution_latex)}
+        </div>
+      </div>`;
+    }
+
+    return `<div style="border:1px solid #222;border-radius:12px;margin-bottom:16px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:#111;border-bottom:1px solid #222;flex-wrap:wrap">
+        <span style="font-size:11px;background:#2a2a2a;border-radius:5px;padding:2px 8px;color:#888">#${i + 1}</span>
+        <span style="font-weight:600;font-size:14px">Es. ${escHtml(item.number)}</span>
+        <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:5px;${typeBadge[item.exercise_type]}">${typeLabel[item.exercise_type]}</span>
+        ${item.has_star ? `<span style="color:#fbbf24">★</span>` : ""}
+        ${item.parts.length > 0 ? `<span style="font-size:11px;color:#a78bfa">${item.parts.length} parti</span>` : ""}
+        ${item.application_category ? `<span style="font-size:11px;color:#888;font-style:italic">${escHtml(item.application_category)}</span>` : ""}
+        ${headerRight}
+      </div>
+      ${body}
+    </div>`;
+  }
+
+  const rows = items.map(renderItem).join("\n");
 
   return `<!DOCTYPE html>
 <html lang="it">
 <head>
 <meta charset="UTF-8">
 <title>Preview — ${escHtml(filename)}</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"></script>
 <style>
-  :root { --bg:#0a0a0a; --bg2:#111; --bg3:#161616; --border:#222; --border2:#1a1a1a; --text:#e5e5e5; --muted:#888; --green:#4ade80; --blue:#60a5fa; --yellow:#f59e0b; --purple:#a78bfa; --red:#f87171; }
-  * { box-sizing: border-box; }
-  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 24px; margin: 0; }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  .meta { color: var(--muted); font-size: 13px; margin-bottom: 24px; line-height: 1.8; }
-  .exercise { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
-  .header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--bg2); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  .num { font-size: 11px; background: #2a2a2a; border-radius: 5px; padding: 2px 8px; color: var(--muted); }
-  .exid { font-weight: 600; font-size: 14px; }
-  .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px; }
-  .badge-ex { background: #0f2e1a; color: var(--green); }
-  .badge-es { background: #0f1e3a; color: var(--blue); }
-  .badge-ap { background: #2e1e0a; color: var(--yellow); }
-  .star { color: #fbbf24; }
-  .cat { font-size: 11px; color: var(--muted); font-style: italic; }
-  .parts-n { font-size: 11px; color: var(--purple); }
-  .sol-ok { font-size: 11px; color: var(--green); margin-left: auto; }
-  .sol-no { font-size: 11px; color: var(--red); margin-left: auto; }
-  .preamble { padding: 14px 16px; background: var(--bg3); border-bottom: 1px solid var(--border2); font-size: 14px; line-height: 1.7; }
-  .part { border-top: 1px solid var(--border2); }
-  .part-label { padding: 4px 16px; font-size: 10px; font-weight: 700; letter-spacing: .12em; color: #555; background: var(--bg3); text-transform: uppercase; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; min-height: 60px; }
-  .col { padding: 14px 16px; font-size: 14px; line-height: 1.7; }
-  .col:first-child { border-right: 1px solid var(--border2); }
-  .col-label { font-size: 9px; font-weight: 700; letter-spacing: .12em; color: #444; margin-bottom: 10px; text-transform: uppercase; }
-  .empty { color: #333; font-style: italic; }
-  img { max-width: 100%; border-radius: 6px; margin: 8px 0; }
-  .katex-display { margin: 0.8em 0; overflow-x: auto; }
-  .katex { font-size: 1em; }
+${katexCss}
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; background: #0a0a0a; color: #e5e5e5; padding: 24px; margin: 0; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+.meta { color: #888; font-size: 13px; margin-bottom: 24px; line-height: 1.8; }
+.katex-display { margin: 0.8em 0; overflow-x: auto; }
+.katex { font-size: 1em; }
 </style>
 </head>
 <body>
 <h1>Preview — ${escHtml(filename)}</h1>
 <p class="meta">
   <strong>${total}</strong> elementi totali &nbsp;·&nbsp;
-  <span style="color:var(--blue)">${ne} esempi</span> &nbsp;·&nbsp;
-  <span style="color:var(--green)">${nx} esercizi</span> &nbsp;·&nbsp;
-  <span style="color:var(--yellow)">${na} applicazioni</span><br>
-  <span style="color:var(--purple)">${multi} multi-parte</span> &nbsp;·&nbsp;
+  <span style="color:#60a5fa">${ne} esempi</span> &nbsp;·&nbsp;
+  <span style="color:#4ade80">${nx} esercizi</span> &nbsp;·&nbsp;
+  <span style="color:#f59e0b">${na} applicazioni</span><br>
+  <span style="color:#a78bfa">${multi} multi-parte</span> &nbsp;·&nbsp;
   <span style="color:#fbbf24">${starred} con stella ★</span>
 </p>
-<div id="app"></div>
-
-<script>
-const DATA = ${dataJson};
-const FILENAME = ${filenameJson};
-
-// Render text containing $$...$$ display math, $...$ inline math, and ![](url) images.
-function renderMath(text) {
-  if (!text) return '<span class="empty">—</span>';
-
-  // Handle images first (preserve them)
-  const IMG_RE = new RegExp('!\\[([^\\]]*)\\]\\(([^)]+)\\)', 'g');
-  const imgPlaceholders = [];
-  text = text.replace(IMG_RE, (_, alt, src) => {
-    imgPlaceholders.push({ alt, src });
-    return '__IMG_' + (imgPlaceholders.length - 1) + '__';
-  });
-
-  // Split by display math $$...$$
-  const parts = text.split(/(\\$\\$[\\s\\S]*?\\$\\$)/g);
-  let html = parts.map(part => {
-    if (part.startsWith('\\$\\$')) {
-      const latex = part.slice(2, -2).trim();
-      try {
-        return katex.renderToString(latex, { displayMode: true, throwOnError: false, trust: true });
-      } catch(e) {
-        return '<code style="color:#f87171">' + esc(part) + '</code>';
-      }
-    }
-    // Split by inline math $...$
-    const inlineParts = part.split(/(\\$[^\\$\\n]+?\\$)/g);
-    return inlineParts.map(ip => {
-      if (ip.startsWith('\\$') && ip.endsWith('\\$') && ip.length > 2) {
-        const latex = ip.slice(1, -1);
-        try {
-          return katex.renderToString(latex, { displayMode: false, throwOnError: false, trust: true });
-        } catch(e) {
-          return '<code style="color:#f87171">' + esc(ip) + '</code>';
-        }
-      }
-      // Plain text: escape HTML and convert newlines
-      return esc(ip).replace(/\\n/g, '<br>');
-    }).join('');
-  }).join('');
-
-  // Restore images
-  imgPlaceholders.forEach((img, i) => {
-    html = html.replace('__IMG_' + i + '__', '<img src="' + img.src + '" alt="' + esc(img.alt) + '">');
-  });
-  return html;
-}
-
-function esc(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function typeInfo(type) {
-  if (type === 'esempio') return { cls: 'badge-es', label: 'Esempio' };
-  if (type === 'application') return { cls: 'badge-ap', label: 'Applicazione' };
-  return { cls: 'badge-ex', label: 'Esercizio' };
-}
-
-function hasSolution(item) {
-  if (item.parts.length > 0) return item.parts.some(p => p.solution_latex);
-  return !!item.solution_latex;
-}
-
-function renderItem(item, index) {
-  const ti = typeInfo(item.exercise_type);
-  const solOk = hasSolution(item);
-
-  let headerExtras = '';
-  if (item.application_category) headerExtras += '<span class="cat">' + esc(item.application_category) + '</span>';
-  if (item.parts.length > 0) headerExtras += '<span class="parts-n">' + item.parts.length + ' parti</span>';
-  headerExtras += solOk
-    ? '<span class="sol-ok" style="margin-left:auto">✓ soluzione</span>'
-    : '<span class="sol-no" style="margin-left:auto">⚠ nessuna soluzione</span>';
-
-  let body = '';
-  if (item.parts.length > 0) {
-    if (item.question_latex) {
-      body += '<div class="preamble">' + renderMath(item.question_latex) + '</div>';
-    }
-    item.parts.forEach(p => {
-      body += '<div class="part">' +
-        '<div class="part-label">Parte ' + p.label.toUpperCase() + '</div>' +
-        '<div class="cols">' +
-          '<div class="col"><div class="col-label">Domanda</div>' + renderMath(p.question_latex) + '</div>' +
-          '<div class="col"><div class="col-label">Soluzione</div>' + renderMath(p.solution_latex) + '</div>' +
-        '</div>' +
-      '</div>';
-    });
-  } else {
-    body = '<div class="cols">' +
-      '<div class="col"><div class="col-label">Domanda</div>' + renderMath(item.question_latex) + '</div>' +
-      '<div class="col"><div class="col-label">Soluzione</div>' + renderMath(item.solution_latex) + '</div>' +
-    '</div>';
-  }
-
-  return '<div class="exercise">' +
-    '<div class="header">' +
-      '<span class="num">#' + (index + 1) + '</span>' +
-      '<span class="exid">Es. ' + esc(item.number) + '</span>' +
-      '<span class="badge ' + ti.cls + '">' + ti.label + '</span>' +
-      (item.has_star ? '<span class="star">★</span>' : '') +
-      headerExtras +
-    '</div>' +
-    body +
-  '</div>';
-}
-
-function init() {
-  document.getElementById('app').innerHTML = DATA.map(renderItem).join('');
-}
-
-window.onload = init;
-</script>
+${rows}
 </body>
 </html>`;
 }
