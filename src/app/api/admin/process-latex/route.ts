@@ -50,6 +50,11 @@ export async function POST(request: NextRequest) {
   const subjectName = subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2";
   const taxonomy = CONCEPT_TAXONOMIES[subject] ?? [];
 
+  // Strip image references — images are not available at runtime
+  const cleanedLatex = latexContent
+    .replace(/\\includegraphics(\[.*?\])?\{.*?\}/g, "[FIGURA RIMOSSA]")
+    .replace(/\\begin\{figure\}[\s\S]*?\\end\{figure\}/g, "[FIGURA RIMOSSA]");
+
   const contextBlock = `
 CONTESTO:
 - Libro: "${bookTitle}"
@@ -59,7 +64,8 @@ CONTESTO:
 REGOLE IMPORTANTI:
 - Scrivi tutto in italiano corretto. I nomi di teoremi, lemmi e risultati devono essere in italiano (es. "teorema di Stokes", "teorema della divergenza", "criterio di Leibniz"), mai in inglese.
 - Nei campi JSON usa SOLO testo semplice italiano e formule LaTeX matematiche. NON usare mai comandi LaTeX di formattazione testo come \\textbf, \\textit, \\emph, \\text{}, \\underline — scrivi solo testo piano.
-- Per le formule usa $...$ per inline e $$...$$ per display.`;
+- Per le formule usa $...$ per inline e $$...$$ per display.
+- Dove vedi [FIGURA RIMOSSA]: se la figura è essenziale per capire la domanda (es. "data la figura seguente..."), SALTA quell'esercizio e non includerlo nel JSON. Se la figura è solo illustrativa o riguarda la soluzione, processa l'esercizio normalmente ignorando la figura.`;
 
   let prompt: string;
 
@@ -83,7 +89,7 @@ Rispondi SOLO con un array JSON valido:
 
 SORGENTE LATEX:
 \`\`\`latex
-${latexContent}
+${cleanedLatex}
 \`\`\``;
   } else {
     prompt = `Sei un esperto di ${subjectName} al Politecnico italiano. Ti fornisco il sorgente LaTeX di un documento con esercizi (eserciziario, tema d'esame, o dispensa).
@@ -105,7 +111,7 @@ Rispondi SOLO con un array JSON valido:
 
 SORGENTE LATEX:
 \`\`\`latex
-${latexContent}
+${cleanedLatex}
 \`\`\``;
   }
 
