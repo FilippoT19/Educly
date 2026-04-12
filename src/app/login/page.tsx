@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { identifyUser } from "@/lib/posthog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,12 +20,13 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setError("Email o password non corretti.");
       setLoading(false);
       return;
     }
+    if (data.user) identifyUser(data.user.id, data.user.email);
     router.push("/dashboard");
     router.refresh();
   }
