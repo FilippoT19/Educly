@@ -25,16 +25,13 @@ export default function Home() {
 
         <div className="space-y-4 max-w-lg">
           <h1
-            className="text-4xl sm:text-5xl font-bold tracking-tight leading-tight"
+            className="text-5xl sm:text-7xl font-bold tracking-tight leading-none"
             style={{ fontFamily: "var(--font-space-grotesk)" }}
           >
-            Analisi 2 al{" "}
-            <span className="text-primary">Politecnico</span>,<br />
-            senza stressarti.
+            Educly
           </h1>
-          <p className="text-[16px] text-muted-foreground leading-relaxed">
-            Esercizi corretti dall&apos;AI, soluzioni passo per passo e un percorso
-            personalizzato in base a dove sbagli davvero.
+          <p className="text-[18px] sm:text-[20px] text-muted-foreground leading-relaxed">
+            L&apos;ingegneria, finalmente spiegata bene.
           </p>
         </div>
 
