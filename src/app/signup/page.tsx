@@ -72,7 +72,7 @@ export default function SignupPage() {
             className="text-[26px] font-semibold tracking-tight text-foreground"
             style={{ fontFamily: "var(--font-space-grotesk)" }}
           >
-            Educly
+            <Link href="/" className="hover:opacity-80 transition-opacity">Educly</Link>
           </p>
           <p className="text-[14px] text-muted-foreground mt-1">
             Crea il tuo account
