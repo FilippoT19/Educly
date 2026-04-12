@@ -41,6 +41,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# ingestion scripts — input/output files stay local
+scripts/input/
+scripts/output/
+
 # Sentry Config File
 .env.sentry-build-plugin
 .env.local
