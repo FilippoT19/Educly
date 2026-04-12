@@ -1,3 +1,4 @@
+export const maxDuration = 300;
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { extractExercisesFromPdf, extractTheoryFromPdf } from "@/lib/ingestion";

@@ -4,6 +4,8 @@ import { populateExerciseData } from "@/lib/claude";
 import Anthropic from "@anthropic-ai/sdk";
 import analisi2 from "@/content/analisi2.json";
 
+export const maxDuration = 300;
+
 const ADMIN_SECRET = process.env.ADMIN_SECRET!;
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
