@@ -31,7 +31,7 @@ export default function Home() {
             Educly
           </h1>
           <p className="text-[18px] sm:text-[20px] text-muted-foreground leading-relaxed">
-            L&apos;ingegneria, finalmente spiegata bene.
+            L&apos;Il futuro dell'educazione.
           </p>
         </div>
 

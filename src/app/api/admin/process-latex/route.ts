@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
+import { populateExerciseData } from "@/lib/claude";
 import Anthropic from "@anthropic-ai/sdk";
+import analisi2 from "@/content/analisi2.json";
 
 const ADMIN_SECRET = process.env.ADMIN_SECRET!;
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
@@ -8,6 +10,16 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 const TOPIC_IDS: Record<string, string[]> = {
   analisi1: ["insiemi_numeri", "successioni", "limiti", "continuita", "derivate", "taylor", "studio_funzione", "integrali_indefiniti", "integrali_definiti", "serie"],
   analisi2: ["funzioni_piu_variabili", "derivate_parziali", "ottimizzazione", "integrali_doppi", "integrali_tripli", "curve_integrali_curvilinei", "campi_vettoriali", "superfici", "edo", "serie_funzioni"],
+};
+
+const CONCEPT_TAXONOMIES: Record<string, string[]> = {
+  analisi2: analisi2.conceptTaxonomy,
+};
+
+const OPEN_FALLBACK = {
+  answers: [{ label: "Soluzione", type: "open" as const }],
+  solutionSteps: [] as never[],
+  conceptTags: [] as string[],
 };
 
 export async function POST(request: NextRequest) {
@@ -36,19 +48,20 @@ export async function POST(request: NextRequest) {
   const { title: bookTitle, subject, doc_type: docType, engineering, section } = doc;
   const topicIds = TOPIC_IDS[subject] ?? TOPIC_IDS["analisi1"];
   const subjectName = subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2";
+  const taxonomy = CONCEPT_TAXONOMIES[subject] ?? [];
 
   const contextBlock = `
 CONTESTO:
 - Libro: "${bookTitle}"
 - Capitolo${chapterIndex ? ` ${chapterIndex} di ${totalChapters}` : ""}: "${chapterTitle}"`;
 
-  let prompt: string;
-
   const COMMON_RULES = `
 REGOLE IMPORTANTI:
 - Scrivi tutto in italiano corretto. I nomi di teoremi, lemmi e risultati devono essere in italiano (es. "teorema di Stokes", "teorema della divergenza", "criterio di Leibniz"), mai in inglese.
 - Nei campi JSON usa SOLO testo semplice italiano e formule LaTeX matematiche. NON usare mai comandi LaTeX di formattazione testo come \\textbf, \\textit, \\emph, \\text{}, \\underline — scrivi solo testo piano.
 - Per le formule usa $...$ per inline e $$...$$ per display.`;
+
+  let prompt: string;
 
   if (docType === "libro_teoria") {
     prompt = `Sei un esperto di ${subjectName} al Politecnico italiano. Ti fornisco il sorgente LaTeX di un capitolo di un libro di testo.
@@ -109,6 +122,7 @@ ${latexContent}
     const items = JSON.parse(jsonMatch[0]);
 
     if (docType === "libro_teoria") {
+      // Theory: save as-is (no populate step needed)
       const { data: maxRow } = await supabase
         .from("theory_lessons")
         .select("lesson_order")
@@ -129,15 +143,46 @@ ${latexContent}
         );
       }
     } else {
-      if (items.length > 0) {
-        await supabase.from("exercises").insert(
-          items.map((e: Record<string, unknown>) => ({
-            subject, topic_id: e.topic_id, difficulty: e.difficulty,
-            source: docType, question_latex: e.question_latex,
-            solution_latex: e.solution_latex, hints: e.hints, tags: e.tags,
-            engineering, section, source_document_id: sourceDocumentId,
-          }))
-        );
+      // Exercises: populate answers + steps + concept_tags inline before saving
+      const populated = await Promise.allSettled(
+        items.map(async (e: Record<string, unknown>) => {
+          try {
+            const pop = await populateExerciseData(
+              subject,
+              e.topic_id as string,
+              e.question_latex as string,
+              e.solution_latex as string | null,
+              taxonomy,
+            );
+            return { ...e, ...pop };
+          } catch {
+            return { ...e, ...OPEN_FALLBACK, solutionSteps: OPEN_FALLBACK.solutionSteps };
+          }
+        })
+      );
+
+      const rows = populated.map((result, i) => {
+        const e = result.status === "fulfilled" ? result.value : { ...items[i], ...OPEN_FALLBACK };
+        return {
+          subject,
+          topic_id: e.topic_id,
+          difficulty: e.difficulty,
+          source: docType,
+          question_latex: e.question_latex,
+          solution_latex: e.solution_latex,
+          hints: e.hints,
+          tags: e.tags,
+          answers: e.answers ?? OPEN_FALLBACK.answers,
+          solution_steps: e.solutionSteps ?? OPEN_FALLBACK.solutionSteps,
+          concept_tags: e.conceptTags ?? OPEN_FALLBACK.conceptTags,
+          engineering,
+          section,
+          source_document_id: sourceDocumentId,
+        };
+      });
+
+      if (rows.length > 0) {
+        await supabase.from("exercises").insert(rows);
       }
     }
 
