@@ -451,6 +451,7 @@ export function PracticeSession({
               key={rec.exerciseId}
               rec={rec}
               onStart={() => { trackRecommendationClicked({ exerciseId: rec.exerciseId, isTop: rec.isTop }); loadExercise(rec.exerciseId); }}
+            />
           ))}
           <Button
             size="sm"
