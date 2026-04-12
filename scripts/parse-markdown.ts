@@ -493,8 +493,8 @@ function generateHtml(items: ParsedItem[], filename: string): string {
 <meta charset="UTF-8">
 <title>Preview — ${escHtml(filename)}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"></script>
 <style>
   :root { --bg:#0a0a0a; --bg2:#111; --bg3:#161616; --border:#222; --border2:#1a1a1a; --text:#e5e5e5; --muted:#888; --green:#4ade80; --blue:#60a5fa; --yellow:#f59e0b; --purple:#a78bfa; --red:#f87171; }
   * { box-sizing: border-box; }
@@ -548,7 +548,7 @@ function renderMath(text) {
   if (!text) return '<span class="empty">—</span>';
 
   // Handle images first (preserve them)
-  const IMG_RE = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  const IMG_RE = new RegExp('!\\[([^\\]]*)\\]\\(([^)]+)\\)', 'g');
   const imgPlaceholders = [];
   text = text.replace(IMG_RE, (_, alt, src) => {
     imgPlaceholders.push({ alt, src });
@@ -652,12 +652,7 @@ function init() {
   document.getElementById('app').innerHTML = DATA.map(renderItem).join('');
 }
 
-// Wait for KaTeX to load
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+window.onload = init;
 </script>
 </body>
 </html>`;
