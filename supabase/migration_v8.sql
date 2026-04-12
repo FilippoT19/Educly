@@ -10,7 +10,7 @@ CREATE POLICY "Students manage own concept mastery"
 -- (currently "Anyone can read" is fine; this blocks anonymous writes)
 CREATE POLICY "No direct writes to exercises"
   ON public.exercises FOR INSERT
-  USING (false);
+  WITH CHECK (false);
 
 CREATE POLICY "No direct deletes of exercises"
   ON public.exercises FOR DELETE
