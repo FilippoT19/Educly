@@ -14,9 +14,7 @@ export async function GET(request: NextRequest) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
+          getAll() { return request.cookies.getAll(); },
           setAll(cookiesToSet) {
             cookiesToSet.forEach(({ name, value, options }) =>
               response.cookies.set(name, value, options)
@@ -26,8 +24,19 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
+    const { data: { user }, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error && user) {
+      // Check if profile exists — if not, send to onboarding
+      const { data: profile } = await supabase
+        .from("students")
+        .select("id")
+        .eq("id", user.id)
+        .single();
+
+      if (!profile) {
+        return NextResponse.redirect(`${origin}/onboarding`, { headers: response.headers });
+      }
+
       return response;
     }
   }
