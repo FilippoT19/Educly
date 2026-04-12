@@ -1,8 +1,8 @@
 /**
  * upload-exercises.ts
  *
- * Takes a JSON file produced by parse-markdown.ts and uploads
- * the exercises to Supabase. Skips exercises already present (by question text).
+ * Reads the JSON produced by parse-markdown.ts and uploads items to Supabase.
+ * Skips items already present (matched by exercise_number + source_document_id).
  *
  * Usage:
  *   npx ts-node scripts/upload-exercises.ts <file.json> [--source-document-id <uuid>]
@@ -16,8 +16,9 @@ import * as fs from "fs";
 import * as path from "path";
 import * as dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import type { ParsedItem, Part } from "./parse-markdown";
 
-dotenv.config({ path: path.resolve(__dirname, "../.env.local") });
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -35,11 +36,37 @@ const TOPIC_IDS: Record<string, string[]> = {
   analisi2: ["funzioni_piu_variabili", "derivate_parziali", "ottimizzazione", "integrali_doppi", "integrali_tripli", "curve_integrali_curvilinei", "campi_vettoriali", "superfici", "edo", "serie_funzioni"],
 };
 
-const OPEN_FALLBACK = {
-  answers: [{ label: "Soluzione", type: "open" as const }],
-  solution_steps: [],
-  concept_tags: [],
-};
+/**
+ * difficulty mapping:
+ *   0 = esempio (worked example)
+ *   1 = easy (default for non-starred exercises)
+ *   2 = medium (default for starred exercises — AI will refine)
+ *   3 = hard
+ */
+function defaultDifficulty(item: ParsedItem): number {
+  if (item.exercise_type === "esempio") return 0;
+  if (item.has_star) return 2;
+  return 1;
+}
+
+/**
+ * Build the `answers` JSONB field.
+ *
+ * For multi-part exercises: one answer slot per part.
+ * For single-part:
+ *   - starred or no solution → open answer (AI will populate solution_steps)
+ *   - non-starred with solution → open answer (solution_latex holds the expected output)
+ * Esempi: no answer expected (it's a worked example to read).
+ */
+function buildAnswers(item: ParsedItem): Array<{ label: string; type: "open" | "exact" }> {
+  if (item.exercise_type === "esempio") {
+    return [];
+  }
+  if (item.parts.length > 0) {
+    return item.parts.map((p) => ({ label: `Parte ${p.label.toUpperCase()}`, type: "open" as const }));
+  }
+  return [{ label: "Soluzione", type: "open" as const }];
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -61,7 +88,6 @@ async function getOrCreateSourceDocument(meta: {
     return meta.sourceDocumentId;
   }
 
-  // Create a new source_document entry
   const title = meta.chapter ?? path.basename(meta.sourceFile, path.extname(meta.sourceFile));
   const { data, error } = await supabase
     .from("source_documents")
@@ -99,9 +125,15 @@ async function main() {
   }
 
   const json = JSON.parse(fs.readFileSync(inputPath, "utf-8"));
-  const { meta, exercises } = json as {
-    meta: { subject: string; source: string; chapter: string | null; sourceFile: string };
-    exercises: Array<{ number: string; question_latex: string; solution_latex: string | null }>;
+  const { meta, items } = json as {
+    meta: {
+      subject: string;
+      source: string;
+      chapter: string | null;
+      subtopic: string | null;
+      sourceFile: string;
+    };
+    items: ParsedItem[];
   };
 
   const subject = meta.subject;
@@ -111,60 +143,84 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`\nUploading ${exercises.length} exercises (subject: ${subject}, source: ${meta.source})`);
+  const byType = {
+    esempio: items.filter((x) => x.exercise_type === "esempio").length,
+    exercise: items.filter((x) => x.exercise_type === "exercise").length,
+    application: items.filter((x) => x.exercise_type === "application").length,
+  };
+
+  console.log(`\nUploading ${items.length} items (subject: ${subject})`);
+  console.log(`  ${byType.esempio} esempi, ${byType.exercise} exercises, ${byType.application} applications`);
 
   const docId = await getOrCreateSourceDocument({ ...meta, sourceDocumentId });
 
   let uploaded = 0;
   let skipped = 0;
+  let errors = 0;
 
-  for (const ex of exercises) {
-    // Check if already exists by question text to avoid duplicates
+  for (const item of items) {
+    // Deduplicate by exercise_number + source_document_id
     const { data: existing } = await supabase
       .from("exercises")
       .select("id")
-      .eq("question_latex", ex.question_latex)
+      .eq("exercise_number", item.number)
       .eq("source_document_id", docId)
       .limit(1)
       .single();
 
     if (existing) {
-      console.log(`  [skip] #${ex.number} — already in DB`);
+      console.log(`  [skip] ${item.number} — already in DB`);
       skipped++;
       continue;
     }
 
     const row = {
       subject,
-      topic_id: topicIds[0], // default to first topic — can be updated via admin populate
-      difficulty: 2,         // default medium — populate will refine this
+      topic_id: topicIds[0],              // default first topic — populate will refine
+      difficulty: defaultDifficulty(item),
       source: meta.source,
-      question_latex: ex.question_latex,
-      solution_latex: ex.solution_latex,
+      question_latex: item.question_latex,
+      solution_latex: item.solution_latex,
       hints: [],
       tags: [],
-      answers: OPEN_FALLBACK.answers,
-      solution_steps: OPEN_FALLBACK.solution_steps,
-      concept_tags: OPEN_FALLBACK.concept_tags,
+      answers: buildAnswers(item),
+      solution_steps: [],
+      concept_tags: [],
       engineering: "tutti",
       section: "tutti",
       source_document_id: docId,
       chapter_title: meta.chapter,
+      // New fields from migration_v11
+      parts: item.parts,
+      has_star: item.has_star,
+      exercise_type: item.exercise_type,
+      subtopic_id: item.subtopic_id ?? meta.subtopic,
+      application_category: item.application_category,
+      exercise_number: item.number,
     };
 
     const { error } = await supabase.from("exercises").insert(row);
     if (error) {
-      console.error(`  [error] #${ex.number}: ${error.message}`);
+      console.error(`  [error] ${item.number}: ${error.message}`);
+      errors++;
     } else {
-      console.log(`  [ok] #${ex.number}`);
+      const star = item.has_star ? " ★" : "";
+      const parts = item.parts.length > 0 ? ` (${item.parts.length} parti)` : "";
+      console.log(`  [ok] ${item.exercise_type} ${item.number}${star}${parts}`);
       uploaded++;
     }
   }
 
-  console.log(`\n✓ Done: ${uploaded} uploaded, ${skipped} skipped`);
+  console.log(`\n✓ Done: ${uploaded} uploaded, ${skipped} skipped, ${errors} errors`);
+
   if (uploaded > 0) {
-    console.log(`\nNow go to the admin panel and use "Popola 5" to fill in`);
-    console.log(`topic_id, difficulty, answers, solution_steps and concept_tags.`);
+    const needsPopulate = items.filter(
+      (x) => x.has_star && x.exercise_type !== "esempio"
+    ).length;
+    if (needsPopulate > 0) {
+      console.log(`\n${needsPopulate} starred exercises need AI populate (topic_id, difficulty, solution_steps, concept_tags).`);
+      console.log(`Run "Popola 5" in the admin panel for this source document.`);
+    }
   }
 }
 
