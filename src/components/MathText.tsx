@@ -38,6 +38,13 @@ export function MathText({ text, className }: MathTextProps) {
         }
       });
 
+      // Convert markdown images ![alt](url) to <img>
+      processed = processed.replace(
+        /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g,
+        (_, alt, url) =>
+          `<img src="${url}" alt="${alt}" style="max-width:100%;border-radius:8px;margin:8px 0;" />`
+      );
+
       // Convert newlines to <br>
       processed = processed.replace(/\n/g, "<br/>");
 

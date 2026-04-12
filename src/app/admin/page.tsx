@@ -409,12 +409,14 @@ export default function AdminPage() {
   const [chIndex, setChIndex] = useState("");
   const [chTotal, setChTotal] = useState("");
   const [chFile, setChFile] = useState<File | null>(null);
+  const [chImages, setChImages] = useState<File[]>([]);
   const [chStatus, setChStatus] = useState<Status>("idle");
   const [chMsg, setChMsg] = useState("");
   const [processed, setProcessed] = useState<ProcessedEntry[]>([]);
 
   // ── Exercise tab ───────────────────────────────────────────────────────────
   const [exFile, setExFile] = useState<File | null>(null);
+  const [exImages, setExImages] = useState<File[]>([]);
   const [exSubject, setExSubject] = useState("analisi1");
   const [exSource, setExSource] = useState("eserciziario");
   const [exTitle, setExTitle] = useState("");
@@ -538,6 +540,21 @@ export default function AdminPage() {
     return path;
   }
 
+  async function uploadImages(images: File[], sourceDocumentId: string): Promise<Record<string, string>> {
+    if (images.length === 0) return {};
+    const formData = new FormData();
+    formData.append("sourceDocumentId", sourceDocumentId);
+    images.forEach((img) => formData.append("images", img));
+    const res = await fetch("/api/admin/upload-images", {
+      method: "POST",
+      headers: { "x-admin-secret": secret },
+      body: formData,
+    });
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data.imageUrls ?? {};
+  }
+
   async function handleProcessChapter() {
     if (!chFile || !chTitle || !detailBook) return;
     const isLatex = chFile.name.endsWith(".tex");
@@ -547,13 +564,15 @@ export default function AdminPage() {
       let res: Response;
 
       if (isLatex) {
-        // LaTeX: read as text, send directly — no storage needed
+        // LaTeX: upload images first if any, then process
+        const imageUrls = await uploadImages(chImages, detailBook.id);
         const latexContent = await chFile.text();
         res = await fetch("/api/admin/process-latex", {
           method: "POST",
           headers: { "content-type": "application/json", "x-admin-secret": secret },
           body: JSON.stringify({
             latexContent,
+            imageUrls,
             sourceDocumentId: detailBook.id,
             chapterTitle: chTitle,
             chapterIndex: chIndex ? parseInt(chIndex) : undefined,
@@ -581,7 +600,7 @@ export default function AdminPage() {
       setProcessed((prev) => [...prev, { chapterTitle: chTitle, extracted: data.extracted, label }]);
       setChMsg(`${data.extracted} ${label} estratti`);
       setChStatus("done");
-      setChTitle(""); setChFile(null); setChIndex("");
+      setChTitle(""); setChFile(null); setChImages([]); setChIndex("");
     } catch (err) {
       setChMsg(err instanceof Error ? err.message : "Errore");
       setChStatus("error");
@@ -603,11 +622,12 @@ export default function AdminPage() {
         const bookData = await bookRes.json();
         if (!bookRes.ok) throw new Error(bookData.error);
         setBooks((prev) => [bookData.book, ...prev]);
+        const imageUrls = await uploadImages(exImages, bookData.book.id);
         const latexContent = await exFile.text();
         const res = await fetch("/api/admin/process-latex", {
           method: "POST",
           headers: { "content-type": "application/json", "x-admin-secret": secret },
-          body: JSON.stringify({ latexContent, sourceDocumentId: bookData.book.id, chapterTitle: exTitle }),
+          body: JSON.stringify({ latexContent, imageUrls, sourceDocumentId: bookData.book.id, chapterTitle: exTitle }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
@@ -623,7 +643,7 @@ export default function AdminPage() {
         if (!res.ok) throw new Error(data.error);
         setExMsg(`Estratti ${data.extracted} esercizi da "${exTitle}"`);
       }
-      setExStatus("done"); setExFile(null); setExTitle(""); setExYear("");
+      setExStatus("done"); setExFile(null); setExImages([]); setExTitle(""); setExYear("");
     } catch (err) { setExMsg(err instanceof Error ? err.message : "Errore"); setExStatus("error"); }
   }
 
@@ -867,6 +887,25 @@ export default function AdminPage() {
                 disabled={chStatus === "uploading" || chStatus === "processing"}
               />
 
+              {chFile?.name.endsWith(".tex") && (
+                <Field label="Immagini (opzionale)" hint="Seleziona i file .jpg/.png dalla cartella images/ del .tex">
+                  <label className="flex items-center gap-2.5 px-3 py-2.5 border-2 border-dashed rounded-xl cursor-pointer transition-colors text-sm border-muted hover:border-primary/40 hover:bg-muted/20 text-muted-foreground">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      disabled={chStatus === "uploading" || chStatus === "processing"}
+                      onChange={(e) => setChImages(Array.from(e.target.files ?? []))}
+                    />
+                    <Upload className="h-4 w-4 shrink-0" />
+                    {chImages.length > 0
+                      ? <span className="text-primary font-medium">{chImages.length} immagini selezionate</span>
+                      : <span>Seleziona immagini…</span>}
+                  </label>
+                </Field>
+              )}
+
               <StatusBanner status={chStatus} message={chMsg} />
 
               <Button
@@ -913,6 +952,24 @@ export default function AdminPage() {
             </div>
             <div className="bg-card border rounded-2xl p-5 space-y-4">
               <FilePickerRow file={exFile} onChange={setExFile} accept=".pdf,.tex" />
+
+              {exFile?.name.endsWith(".tex") && (
+                <Field label="Immagini (opzionale)" hint="Seleziona i file .jpg/.png dalla cartella images/ del .tex">
+                  <label className="flex items-center gap-2.5 px-3 py-2.5 border-2 border-dashed rounded-xl cursor-pointer transition-colors text-sm border-muted hover:border-primary/40 hover:bg-muted/20 text-muted-foreground">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => setExImages(Array.from(e.target.files ?? []))}
+                    />
+                    <Upload className="h-4 w-4 shrink-0" />
+                    {exImages.length > 0
+                      ? <span className="text-primary font-medium">{exImages.length} immagini selezionate</span>
+                      : <span>Seleziona immagini…</span>}
+                  </label>
+                </Field>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Materia">
                   <NativeSelect value={exSubject} onChange={setExSubject}

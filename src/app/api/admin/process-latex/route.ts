@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { sourceDocumentId, chapterTitle, latexContent, chapterIndex, totalChapters } = await request.json();
+  const { sourceDocumentId, chapterTitle, latexContent, chapterIndex, totalChapters, imageUrls } = await request.json();
 
   if (!sourceDocumentId || !chapterTitle || !latexContent) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
@@ -50,10 +50,23 @@ export async function POST(request: NextRequest) {
   const subjectName = subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2";
   const taxonomy = CONCEPT_TAXONOMIES[subject] ?? [];
 
-  // Strip image references — images are not available at runtime
+  // Replace \includegraphics with actual image URLs if available, otherwise strip
+  const urls: Record<string, string> = imageUrls ?? {};
   const cleanedLatex = latexContent
-    .replace(/\\includegraphics(\[.*?\])?\{.*?\}/g, "[FIGURA RIMOSSA]")
-    .replace(/\\begin\{figure\}[\s\S]*?\\end\{figure\}/g, "[FIGURA RIMOSSA]");
+    // First handle full figure environments
+    .replace(/\\begin\{figure\}([\s\S]*?)\\end\{figure\}/g, (_: string, inner: string) => {
+      const match = inner.match(/\\includegraphics(?:\[.*?\])?\{([^}]+)\}/);
+      if (!match) return "[FIGURA RIMOSSA]";
+      const filename = match[1].replace(/^.*\//, ""); // bare filename
+      const url = urls[match[1]] ?? urls[filename];
+      return url ? `![figura](${url})` : "[FIGURA RIMOSSA]";
+    })
+    // Then handle standalone \includegraphics
+    .replace(/\\includegraphics(?:\[.*?\])?\{([^}]+)\}/g, (_: string, path: string) => {
+      const filename = path.replace(/^.*\//, "");
+      const url = urls[path] ?? urls[filename];
+      return url ? `![figura](${url})` : "[FIGURA RIMOSSA]";
+    });
 
   const contextBlock = `
 CONTESTO:
@@ -65,7 +78,8 @@ REGOLE IMPORTANTI:
 - Scrivi tutto in italiano corretto. I nomi di teoremi, lemmi e risultati devono essere in italiano (es. "teorema di Stokes", "teorema della divergenza", "criterio di Leibniz"), mai in inglese.
 - Nei campi JSON usa SOLO testo semplice italiano e formule LaTeX matematiche. NON usare mai comandi LaTeX di formattazione testo come \\textbf, \\textit, \\emph, \\text{}, \\underline — scrivi solo testo piano.
 - Per le formule usa $...$ per inline e $$...$$ per display.
-- Dove vedi [FIGURA RIMOSSA]: se la figura è essenziale per capire la domanda (es. "data la figura seguente..."), SALTA quell'esercizio e non includerlo nel JSON. Se la figura è solo illustrativa o riguarda la soluzione, processa l'esercizio normalmente ignorando la figura.`;
+- Dove vedi ![figura](url): è un'immagine reale. Includila esattamente così com'è (![figura](url)) nel campo question_latex o solution_latex dove appare nel LaTeX originale. NON rimuoverla.
+- Dove vedi [FIGURA RIMOSSA]: se la figura era essenziale per capire la domanda (es. "data la figura seguente..."), SALTA quell'esercizio. Se era solo illustrativa, processa normalmente.`;
 
   let prompt: string;
 
