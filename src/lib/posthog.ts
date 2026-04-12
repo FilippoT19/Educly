@@ -1,26 +1,7 @@
-// PostHog event tracking — import and call these anywhere client-side
+// PostHog event tracking — import and call these anywhere client-side.
+// PostHog is initialized in instrumentation-client.ts.
 
 import posthog from "posthog-js";
-
-let initialized = false;
-
-export function initPostHog() {
-  if (initialized || typeof window === "undefined") return;
-  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-  const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://eu.i.posthog.com";
-  if (!key) return;
-  posthog.init(key, {
-    api_host: host,
-    person_profiles: "identified_only",
-    capture_pageview: true,
-    capture_pageleave: true,
-    // Don't send in development
-    loaded: (ph) => {
-      if (process.env.NODE_ENV !== "production") ph.opt_out_capturing();
-    },
-  });
-  initialized = true;
-}
 
 export function identifyUser(userId: string, email?: string) {
   posthog.identify(userId, { email });
@@ -30,7 +11,21 @@ export function resetUser() {
   posthog.reset();
 }
 
-// ── Key product events ────────────────────────────────────────────────────────
+// ── Auth events ───────────────────────────────────────────────────────────────
+
+export function trackUserLoggedIn(props: { email: string }) {
+  posthog.capture("user_logged_in", props);
+}
+
+export function trackUserSignedUp(props: { email: string; course: string; year: number }) {
+  posthog.capture("user_signed_up", props);
+}
+
+export function trackGuestLogin() {
+  posthog.capture("guest_login");
+}
+
+// ── Exercise practice events ──────────────────────────────────────────────────
 
 export function trackExerciseLoaded(props: {
   subject: string;
@@ -39,6 +34,10 @@ export function trackExerciseLoaded(props: {
   fromDb: boolean;
 }) {
   posthog.capture("exercise_loaded", props);
+}
+
+export function trackExerciseStarted(props: { subject: string; topicId: string }) {
+  posthog.capture("exercise_started", props);
 }
 
 export function trackAnswerSubmitted(props: {
@@ -59,9 +58,32 @@ export function trackCorrectionResult(props: {
   posthog.capture("correction_result", props);
 }
 
+export function trackHintRevealed(props: { subject: string; topicId: string }) {
+  posthog.capture("hint_revealed", props);
+}
+
 export function trackRecommendationClicked(props: {
   exerciseId: string;
   isTop: boolean;
 }) {
   posthog.capture("recommendation_clicked", props);
+}
+
+// ── Exercise browser events ───────────────────────────────────────────────────
+
+export function trackExerciseBrowserFiltered(props: {
+  subject: string;
+  categoryId: string;
+  filterType: "difficulty" | "tag";
+  filterValue: string;
+}) {
+  posthog.capture("exercise_browser_filtered", props);
+}
+
+export function trackExerciseSolutionViewed(props: {
+  subject: string;
+  exerciseId: string;
+  difficulty: number;
+}) {
+  posthog.capture("exercise_solution_viewed", props);
 }

@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, Sparkles, CheckCircle2, XCircle, Circle, BookOp
 import { Button } from "@/components/ui/button";
 import { MathText } from "@/components/MathText";
 import { cn } from "@/lib/utils";
+import { trackExerciseBrowserFiltered, trackExerciseSolutionViewed } from "@/lib/posthog";
 
 interface Exercise {
   id: string;
@@ -120,7 +121,7 @@ export function ExerciseBrowser({ exercises, allTags, subject, categoryId }: Pro
           diffCounts[k] > 0 ? (
             <button
               key={k}
-              onClick={() => setSelectedDiff(selectedDiff === k ? null : k)}
+              onClick={() => { const next = selectedDiff === k ? null : k; setSelectedDiff(next); if (next) trackExerciseBrowserFiltered({ subject, categoryId, filterType: "difficulty", filterValue: k }); }}
               className={cn(
                 "px-3 py-1 rounded-full text-xs font-medium border transition-colors",
                 selectedDiff === k
@@ -183,7 +184,7 @@ export function ExerciseBrowser({ exercises, allTags, subject, categoryId }: Pro
             {filteredTags.map((tag) => (
               <button
                 key={tag}
-                onClick={() => { setSelectedTag(tag === selectedTag ? null : tag); setShowTagSearch(false); setTagQuery(""); }}
+                onClick={() => { const next = tag === selectedTag ? null : tag; setSelectedTag(next); setShowTagSearch(false); setTagQuery(""); if (next) trackExerciseBrowserFiltered({ subject, categoryId, filterType: "tag", filterValue: tag }); }}
                 className={cn(
                   "px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
                   selectedTag === tag
@@ -301,7 +302,7 @@ export function ExerciseBrowser({ exercises, allTags, subject, categoryId }: Pro
                     {/* Solution — hidden by default */}
                     <div>
                       <button
-                        onClick={() => setShowSolution((s) => ({ ...s, [ex.id]: !s[ex.id] }))}
+                        onClick={() => { const next = !showSolution[ex.id]; setShowSolution((s) => ({ ...s, [ex.id]: next })); if (next) trackExerciseSolutionViewed({ subject, exerciseId: ex.id, difficulty: ex.difficulty }); }}
                         className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
                       >
                         <BookOpen className="h-3.5 w-3.5" />

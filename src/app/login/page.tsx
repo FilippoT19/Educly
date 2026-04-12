@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { identifyUser } from "@/lib/posthog";
+import { identifyUser, trackUserLoggedIn } from "@/lib/posthog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +26,10 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    if (data.user) identifyUser(data.user.id, data.user.email);
+    if (data.user) {
+      identifyUser(data.user.id, data.user.email);
+      trackUserLoggedIn({ email: data.user.email ?? "" });
+    }
     router.push("/dashboard");
     router.refresh();
   }

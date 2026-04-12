@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { AnswerCheckResult, SolutionStep } from "@/lib/claude";
 import type { RecommendationItem } from "@/app/api/exercise/recommend/route";
+import { trackExerciseStarted, trackHintRevealed } from "@/lib/posthog";
 
 interface Topic {
   id: string;
@@ -531,7 +532,7 @@ export function PracticeSession({
                   Riceverai un esercizio calibrato sul tuo livello
                 </p>
               </div>
-              <Button size="lg" onClick={() => loadExercise()}>Inizia</Button>
+              <Button size="lg" onClick={() => { trackExerciseStarted({ subject, topicId: topic.id }); loadExercise(); }}>Inizia</Button>
             </div>
           )}
 
@@ -562,7 +563,7 @@ export function PracticeSession({
                 <div>
                   {!showHints ? (
                     <button
-                      onClick={() => { setShowHints(true); setHintsUsed(true); }}
+                      onClick={() => { setShowHints(true); setHintsUsed(true); trackHintRevealed({ subject, topicId: topic.id }); }}
                       className="flex items-center gap-2 text-sm text-muted-foreground hover:text-amber-600 transition-colors"
                     >
                       <Lightbulb className="h-4 w-4" />

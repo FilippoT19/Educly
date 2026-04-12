@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { trackGuestLogin } from "@/lib/posthog";
 
 export function GuestButton() {
   const router = useRouter();
@@ -25,6 +26,7 @@ export function GuestButton() {
       setLoading(false);
       return;
     }
+    trackGuestLogin();
     router.push("/dashboard");
     router.refresh();
   }

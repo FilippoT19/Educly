@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -118,6 +119,19 @@ export async function POST(request: NextRequest) {
       }
     }
   }
+
+  getPostHogClient().capture({
+    distinctId: user.id,
+    event: "exercise_saved",
+    properties: {
+      subject,
+      topicId,
+      exerciseId: exerciseId ?? null,
+      isCorrect,
+      score: score ?? null,
+      difficulty: difficulty ?? 1,
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }

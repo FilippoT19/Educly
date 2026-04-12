@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { correctAnswer } from "@/lib/claude";
 import { isRateLimited } from "@/lib/rateLimit";
+import { getPostHogClient } from "@/lib/posthog-server";
 import type { ExerciseAnswer, SolutionStep, AnswerCheckResult } from "@/lib/claude";
 
 function normalizeAnswer(s: string): string {
@@ -94,6 +95,11 @@ export async function POST(request: NextRequest) {
               correctAnswer: `$${correctAnswerStr}$`,
               solutionSteps: steps,
             };
+            getPostHogClient().capture({
+              distinctId: user.id,
+              event: "exercise_corrected",
+              properties: { subject, exerciseId, isCorrect, usedDb: true },
+            });
             return NextResponse.json(result);
           }
 
@@ -118,6 +124,11 @@ export async function POST(request: NextRequest) {
               correctAnswer: correctAnswerStr,
               solutionSteps: steps,
             };
+            getPostHogClient().capture({
+              distinctId: user.id,
+              event: "exercise_corrected",
+              properties: { subject, exerciseId, isCorrect: allMatch, usedDb: true },
+            });
             return NextResponse.json(result);
           }
 
@@ -128,6 +139,11 @@ export async function POST(request: NextRequest) {
 
     // Fallback: use Claude
     const result = await correctAnswer(subject, topicName, exerciseText, studentAnswer.trim());
+    getPostHogClient().capture({
+      distinctId: user.id,
+      event: "exercise_corrected",
+      properties: { subject, exerciseId: exerciseId ?? null, isCorrect: result.isCorrect, usedDb: false },
+    });
     return NextResponse.json(result);
   } catch (err) {
     console.error("Correction error:", err);

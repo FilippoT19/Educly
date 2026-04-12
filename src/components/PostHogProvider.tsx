@@ -1,23 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
-import { usePathname } from "next/navigation";
-import { initPostHog } from "@/lib/posthog";
+// PostHog is initialized in instrumentation-client.ts (Next.js 15.3+ pattern).
+// This component is kept as a thin wrapper for layout compatibility.
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-
-  useEffect(() => {
-    initPostHog();
-  }, []);
-
-  // Track client-side navigations
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    // posthog.capture_pageview is on, so page changes are tracked automatically
-    // Nothing extra needed here — just keeping the hook for future custom page props
-    void pathname;
-  }, [pathname]);
-
   return <>{children}</>;
 }
