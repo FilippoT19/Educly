@@ -165,11 +165,12 @@ function identifyBlocks(lines: string[]): BlockBounds {
       if (esempiStart !== -1 && esempiEnd === -1) esempiEnd = i;
       continue;
     }
-    // Section headings like "### 1.1.B. Applicazioni" — extract subtopic id
+    // Section headings like "### 1.1.B. Applicazioni" or "### 1.2.E. Applicazioni fisiche"
+    // Only treat as applications if the heading contains "Applicazioni"
     const appMatch = line.match(/^#{2,3}\s+(\d+\.\d+\.[A-Z])\./);
-    if (appMatch && exercisesStart !== -1 && applicationsStart === -1) {
+    if (appMatch && line.includes("Applicazioni") && applicationsStart === -1) {
       applicationsStart = i + 1;
-      applicationsSubtopic = appMatch[1];  // e.g. "1.1.B"
+      applicationsSubtopic = appMatch[1];  // e.g. "1.1.B" or "1.2.E"
       continue;
     }
     if (/^##\s+Soluzioni/.test(line) && soluzioniStart === -1) {
@@ -196,6 +197,7 @@ function identifyBlocks(lines: string[]): BlockBounds {
  * Returns { number, rest } or null.
  */
 function matchExerciseNumber(line: string): { number: string; rest: string } | null {
+  const isHeading = /^#{1,4}\s+/.test(line);
   // Strip optional heading markers (##, ###, ####)
   const stripped = line.replace(/^#{1,4}\s+/, "");
 
@@ -210,6 +212,10 @@ function matchExerciseNumber(line: string): { number: string; rest: string } | n
   // it's a section heading sub-topic (1.1.B. ...) — skip it.
   // Exception: K alone is a star variant, not a section letter.
   if (/^\s*[A-JL-Z]\./.test(rest)) return null;
+
+  // If this is a heading line and the rest is a plain section title
+  // (capital letter + lowercase, e.g. "### 1.2. Equazioni lineari..."), skip it.
+  if (isHeading && /^\s*[A-Z][a-z]/.test(rest)) return null;
 
   // Strip star markers from the beginning of rest before returning
   const restClean = rest.trimStart().replace(/^[★⊛*]|^\\&|^\bK\b/, "").trimStart();
@@ -226,12 +232,17 @@ function parseEsempi(lines: string[], start: number, end: number): Array<{ numbe
   let current: { number: string; lines: string[] } | null = null;
 
   for (let i = start; i < end; i++) {
-    const m = lines[i].match(ESEMPIO_RE);
+    const line = lines[i];
+    const m = line.match(ESEMPIO_RE);
     if (m) {
       if (current) blocks.push(current);
-      current = { number: m[1], lines: [lines[i]] };
+      current = { number: m[1], lines: [line] };
+    } else if (/^#{1,4}\s+/.test(line) && !m) {
+      // Any heading (section title) terminates current esempio
+      if (current) blocks.push(current);
+      current = null;
     } else if (current) {
-      current.lines.push(lines[i]);
+      current.lines.push(line);
     }
   }
   if (current) blocks.push(current);
@@ -327,14 +338,22 @@ function parseExerciseBlock(
   for (let i = start; i < end; i++) {
     const line = lines[i];
 
-    // Sub-category headings inside the applications block (e.g. "## Modelli di crescita")
-    // These are ## lines that are NOT exercise numbers
-    if (trackCategories && /^##\s+/.test(line) && !matchExerciseNumber(line)) {
-      currentCategory = line.replace(/^##\s+/, "").trim();
+    const isHeading = /^#{1,4}\s+/.test(line);
+    const exMatch = matchExerciseNumber(line);
+
+    if (isHeading && !exMatch) {
+      // Any heading that isn't an exercise number terminates the current exercise
+      // and starts a "dead zone" (intro text, section title, etc.) — just ignore.
+      if (current) items.push(current);
+      current = null;
+
+      // In applications block, track sub-category headings (## Modelli di crescita)
+      if (trackCategories && /^##\s+/.test(line)) {
+        currentCategory = line.replace(/^##\s+/, "").trim();
+      }
       continue;
     }
 
-    const exMatch = matchExerciseNumber(line);
     if (exMatch) {
       if (current) items.push(current);
       // The rest of the header line (after number) may include text — include it
@@ -347,6 +366,7 @@ function parseExerciseBlock(
     } else if (current) {
       current.lines.push(line);
     }
+    // else: non-heading, non-exercise line while current=null → intro text, skip
   }
   if (current) items.push(current);
 
@@ -663,23 +683,19 @@ function main() {
 
   const blocks = identifyBlocks(lines);
   console.log(`\n  Block boundaries:`);
-  console.log(`    Esempi:       lines ${blocks.esempiStart}–${blocks.esempiEnd}`);
-  console.log(`    Exercises:    lines ${blocks.exercisesStart}–${blocks.applicationsStart}`);
-  console.log(`    Applications: lines ${blocks.applicationsStart}–${blocks.soluzioniStart}`);
-  console.log(`    Solutions:    lines ${blocks.soluzioniStart}–${lines.length}`);
+  console.log(`    Esempi+Exercises: lines 0–${blocks.applicationsStart} (multi-section scan)`);
+  console.log(`    Applications:     lines ${blocks.applicationsStart}–${blocks.soluzioniStart}`);
+  console.log(`    Solutions:        lines ${blocks.soluzioniStart}–${lines.length}`);
 
-  if (blocks.esempiStart === -1) console.warn("  ⚠ No '## Esempi svolti' found");
-  if (blocks.exercisesStart === -1) {
-    console.error("  ✗ No '## Esercizi' found — cannot continue");
-    process.exit(1);
-  }
+  if (blocks.exercisesStart === -1) console.warn("  ⚠ No '## Esercizi' found — scanning full file for exercises");
 
-  const rawEsempi = blocks.esempiStart !== -1
-    ? parseEsempi(lines, blocks.esempiStart, blocks.esempiEnd)
-    : [];
+  // Scan the full pre-applications range for both esempi and exercises.
+  // This handles files with multiple ## Esempi svolti / ## Esercizi sections,
+  // and sections where exercises appear without an ## Esercizi header (e.g. 1.2.D).
+  const rawEsempi = parseEsempi(lines, 0, blocks.applicationsStart);
 
   const rawExercises = parseExerciseBlock(
-    lines, blocks.exercisesStart, blocks.applicationsStart, false
+    lines, 0, blocks.applicationsStart, false
   );
   const rawApplications = parseExerciseBlock(
     lines, blocks.applicationsStart, blocks.soluzioniStart, true
