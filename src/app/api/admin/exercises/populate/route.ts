@@ -38,19 +38,19 @@ export async function POST(request: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Count total remaining
+  // "Not yet AI-populated" = concept_tags is empty (set by upload script default, filled by AI)
   const { count: totalRemaining } = await supabase
     .from("exercises")
     .select("id", { count: "exact", head: true })
     .eq("subject", subject)
-    .or("answers.eq.[],answers.is.null");
+    .or("concept_tags.eq.{},concept_tags.is.null");
 
   // Get next N exercises to process
   const { data: exercises, error } = await supabase
     .from("exercises")
     .select("id, subject, topic_id, question_latex, solution_latex")
     .eq("subject", subject)
-    .or("answers.eq.[],answers.is.null")
+    .or("concept_tags.eq.{},concept_tags.is.null")
     .limit(limit);
 
   if (error) {
