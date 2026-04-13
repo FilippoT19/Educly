@@ -205,7 +205,9 @@ function matchExerciseNumber(line: string): { number: string; rest: string } | n
   // Exception: K alone is a star variant, not a section letter.
   if (/^\s*[A-JL-Z]\./.test(rest)) return null;
 
-  return { number, rest: rest.trimStart() };
+  // Strip star markers from the beginning of rest before returning
+  const restClean = rest.trimStart().replace(/^[★⊛*]|^\\&|^\bK\b/, "").trimStart();
+  return { number, rest: restClean };
 }
 
 // ── Parse esempi ──────────────────────────────────────────────────────────────
