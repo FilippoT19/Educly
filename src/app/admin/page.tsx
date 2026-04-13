@@ -305,7 +305,7 @@ function ExerciseCard({ ex, secret, onDelete, onPopulated }: {
 
   // Answer is populated if at least one answers entry has a value
   const hasAnswer = ex.answers?.some((a) => a.value != null && a.value !== "") ?? false;
-  const hasTags = (ex.concept_tags?.length ?? 0) > 0;
+  const hasTags = (ex.concept_tags?.length ?? 0) > 0 && !ex.concept_tags?.includes("da_rivedere");
   const numParts = ex.parts?.length ?? 0;
   const label = ex.exercise_number
     ? `${ex.exercise_type === "esempio" ? "Es. " : ""}${ex.exercise_number}${ex.has_star ? " ★" : ""}${numParts > 1 ? ` (${numParts}p)` : ""}`

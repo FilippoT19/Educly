@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
         .update({
           answers: OPEN_FALLBACK.answers,
           solution_steps: OPEN_FALLBACK.solutionSteps,
-          concept_tags: OPEN_FALLBACK.conceptTags,
+          concept_tags: ["da_rivedere"],  // non-empty so it's not re-processed
         })
         .eq("id", ex.id);
     }

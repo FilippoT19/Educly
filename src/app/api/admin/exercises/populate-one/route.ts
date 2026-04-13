@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
     result = {
       answers: [{ label: "Soluzione", type: "open" as const }],
       solutionSteps: [],
-      conceptTags: [] as string[],
+      conceptTags: ["da_rivedere"],
     };
   }
 
