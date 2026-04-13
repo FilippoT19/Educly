@@ -437,7 +437,7 @@ function ExerciseCard({ ex, secret, onDelete, onPopulated }: {
               <Separator />
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Soluzione</p>
-                <MathText text={ex.solution_latex} className="text-sm" />
+                <MathText text={ex.solution_latex ?? ""} className="text-sm" />
               </div>
               <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
                 <Pencil className="h-3.5 w-3.5 mr-1" />Modifica
