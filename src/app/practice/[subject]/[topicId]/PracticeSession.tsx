@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { AnswerCheckResult, SolutionStep } from "@/lib/claude";
 import type { RecommendationItem } from "@/app/api/exercise/recommend/route";
+import { ExerciseAIAgent } from "@/components/ExerciseAIAgent";
 import {
   trackExerciseStarted,
   trackHintRevealed,
@@ -555,6 +556,14 @@ export function PracticeSession({
 
           {(phase === "solving" || phase === "correcting") && exercise && (
             <>
+              {phase === "solving" && (
+                <ExerciseAIAgent
+                  exerciseText={exercise.text}
+                  subject={subject}
+                  phase={phase}
+                  steps={[]}
+                />
+              )}
               <Card>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
@@ -686,6 +695,13 @@ export function PracticeSession({
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {header}
+      <ExerciseAIAgent
+        exerciseText={exercise?.text ?? ""}
+        subject={subject}
+        phase={phase}
+        steps={steps}
+        currentStepIndex={phase === "step_review" ? stepIndex : undefined}
+      />
       <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-6">
         <div className="grid md:grid-cols-[1fr_280px] gap-6 items-start">
 

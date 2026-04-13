@@ -460,5 +460,5 @@ Regole:
   const content = response.content[0];
   if (content.type !== "text") throw new Error("Unexpected response type");
 
-  return parseClaudeJson(content.text);
+  return parseClaudeJson(content.text) as { answers: ExerciseAnswer[]; solutionSteps: SolutionStep[]; conceptTags: string[] };
 }

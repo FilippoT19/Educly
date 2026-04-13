@@ -217,6 +217,7 @@ async function populateExerciseData(
   questionLatex: string,
   solutionLatex: string | null,
   conceptTaxonomy: string[] = [],
+  hasStar: boolean = false,
 ): Promise<PopulateResult> {
   const subjectName =
     subject === "analisi1" ? "Analisi Matematica 1" : "Analisi Matematica 2";
@@ -226,6 +227,53 @@ async function populateExerciseData(
       ? `\nTASONOMIA DI CONCETTI DISPONIBILI (scegli 2-4 tra questi, SOLO da questa lista):\n${conceptTaxonomy.join(", ")}\n`
       : "";
 
+  // Non-starred exercises: only populate answers + conceptTags, skip solution_steps
+  if (!hasStar) {
+    const leanPrompt = `Sei un professore di ${subjectName} al Politecnico italiano.
+
+Analizza questo esercizio:
+
+ESERCIZIO:
+${questionLatex}
+
+${solutionLatex ? `SOLUZIONE COMPLETA:\n${solutionLatex}` : ""}
+${taxonomyBlock}
+Il tuo compito:
+1. Identifica le domande dell'esercizio (di solito 1, a volte 2-3 per esercizi con parti a), b), c))
+2. Per ogni domanda: determina se la risposta è "exact" (numero, formula semplice verificabile automaticamente) o "open" (dimostrazione, ragionamento)
+3. Scegli tutti i concept_tags dalla tassonomia che descrivono concetti genuinamente testati da questo esercizio
+
+Rispondi SOLO in formato JSON:
+{
+  "answers": [
+    {
+      "label": "Risultato",
+      "type": "exact",
+      "value": "risposta normalizzata senza LaTeX, es: pi/4 oppure 3/2 oppure 0"
+    }
+  ],
+  "conceptTags": ["tag1", "tag2"]
+}
+
+Regole:
+- answers.value: testo semplice normalizzato (es: "pi/4" non "\\frac{\\pi}{4}"), accetta varianti comuni
+- type "open" se la risposta è una dimostrazione, un ragionamento, o non verificabile automaticamente
+- conceptTags: SOLO valori dalla tassonomia fornita, nessun tag inventato`;
+
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: leanPrompt }],
+    });
+
+    const content = response.content[0];
+    if (content.type !== "text") throw new Error("Unexpected response type");
+
+    const partial = parseClaudeJson(content.text) as { answers: ExerciseAnswer[]; conceptTags: string[] };
+    return { answers: partial.answers, solutionSteps: [], conceptTags: partial.conceptTags };
+  }
+
+  // Starred exercises: full populate with solution steps
   const prompt = `Sei un professore di ${subjectName} al Politecnico italiano.
 
 Analizza questo esercizio e la sua soluzione:
@@ -385,6 +433,7 @@ async function main() {
         questionText,
         solutionText,
         taxonomy,
+        ex.has_star ?? false,
       );
 
       await supabase
