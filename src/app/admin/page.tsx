@@ -281,10 +281,15 @@ interface ExerciseAnswer {
 
 interface Exercise {
   id: string; topic_id: string; difficulty: number; source: string;
-  question_latex: string; solution_latex: string; hints: string[];
+  question_latex: string; solution_latex: string | null; hints: string[];
   engineering: string; section: string;
   answers?: ExerciseAnswer[];
   solution_steps?: unknown[];
+  concept_tags?: string[];
+  has_star?: boolean;
+  exercise_type?: string;
+  exercise_number?: string;
+  parts?: Array<{ label: string; question_latex: string; solution_latex: string | null }>;
 }
 
 function ExerciseCard({ ex, secret, onDelete, onPopulated }: {
@@ -298,9 +303,16 @@ function ExerciseCard({ ex, secret, onDelete, onPopulated }: {
   const [saving, setSaving] = useState(false);
   const [populating, setPopulating] = useState(false);
 
-  const hasAnswers = ex.answers && ex.answers.length > 0;
-  // Truncate question to first 80 chars for preview
-  const preview = ex.question_latex.replace(/\$\$?[^$]*\$\$?/g, "…").replace(/\s+/g, " ").trim().slice(0, 90);
+  // Answer is populated if at least one answers entry has a value
+  const hasAnswer = ex.answers?.some((a) => a.value != null && a.value !== "") ?? false;
+  const hasTags = (ex.concept_tags?.length ?? 0) > 0;
+  const numParts = ex.parts?.length ?? 0;
+  const label = ex.exercise_number
+    ? `${ex.exercise_type === "esempio" ? "Es. " : ""}${ex.exercise_number}${ex.has_star ? " ★" : ""}${numParts > 1 ? ` (${numParts}p)` : ""}`
+    : null;
+  const preview = ex.question_latex
+    ? ex.question_latex.replace(/\$\$?[^$]*\$\$?/g, "…").replace(/\s+/g, " ").trim().slice(0, 80)
+    : ex.parts?.[0]?.question_latex?.replace(/\$\$?[^$]*\$\$?/g, "…").replace(/\s+/g, " ").trim().slice(0, 80) ?? "";
 
   async function populate() {
     setPopulating(true);
@@ -342,20 +354,23 @@ function ExerciseCard({ ex, secret, onDelete, onPopulated }: {
           className="flex items-center gap-2 flex-1 min-w-0 text-left"
         >
           <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} />
-          <span className="text-xs text-muted-foreground truncate flex-1">{preview || ex.topic_id}</span>
+          <span className="text-xs text-muted-foreground truncate flex-1">
+            {label && <span className="font-medium text-foreground mr-1.5">{label}</span>}
+            {preview || ex.topic_id}
+          </span>
         </button>
 
         {/* Badges */}
         <div className="flex items-center gap-1.5 shrink-0">
           <Badge variant="outline" className="text-[11px] px-1.5 py-0">{ex.topic_id.replace(/_/g, " ")}</Badge>
           <Badge variant="secondary" className="text-[11px] px-1.5 py-0">{DIFFICULTY_LABELS[ex.difficulty]}</Badge>
-          {hasAnswers ? (
-            <Badge className="text-[11px] px-1.5 py-0 bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-200">
-              ✓
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="text-[11px] px-1.5 py-0 text-orange-600 border-orange-400">⚠</Badge>
-          )}
+          {/* A = risposta finale | T = concept tags */}
+          <Badge className={`text-[11px] px-1.5 py-0 ${hasAnswer ? "bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-300" : "bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950 dark:text-orange-300"}`}>
+            A
+          </Badge>
+          <Badge className={`text-[11px] px-1.5 py-0 ${hasTags ? "bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-300" : "bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-950 dark:text-orange-300"}`}>
+            T
+          </Badge>
         </div>
 
         {/* Action buttons */}

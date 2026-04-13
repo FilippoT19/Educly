@@ -19,6 +19,40 @@ function getConceptTaxonomy(subject: string): string[] {
   return curriculum && "conceptTaxonomy" in curriculum ? curriculum.conceptTaxonomy : [];
 }
 
+type ExerciseRow = {
+  question_latex: string | null;
+  solution_latex: string | null;
+  has_star: boolean | null;
+  parts: Array<{ label: string; question_latex: string; solution_latex: string | null }> | null;
+};
+
+/**
+ * Build the question and solution strings to send to Claude.
+ * For multi-part exercises, concatenate all parts.
+ * For non-starred: solution_latex is the final answer (brief).
+ * For starred: solution_latex is the full worked solution.
+ */
+function buildTexts(ex: ExerciseRow): { questionText: string; solutionText: string | null } {
+  const parts = ex.parts ?? [];
+
+  if (parts.length > 0) {
+    const preamble = ex.question_latex ?? "";
+    const questionText = [
+      preamble,
+      ...parts.map((p) => `Parte ${p.label.toUpperCase()}:\n${p.question_latex}`),
+    ].filter(Boolean).join("\n\n");
+
+    const solutionParts = parts
+      .filter((p) => p.solution_latex)
+      .map((p) => `Parte ${p.label.toUpperCase()}:\n${p.solution_latex}`);
+    const solutionText = solutionParts.length > 0 ? solutionParts.join("\n\n") : null;
+
+    return { questionText, solutionText };
+  }
+
+  return { questionText: ex.question_latex ?? "", solutionText: ex.solution_latex };
+}
+
 // Fallback when Claude can't parse the exercise
 const OPEN_FALLBACK = {
   answers: [{ label: "Soluzione", type: "open" as const }],
@@ -48,7 +82,7 @@ export async function POST(request: NextRequest) {
   // Get next N exercises to process
   const { data: exercises, error } = await supabase
     .from("exercises")
-    .select("id, subject, topic_id, question_latex, solution_latex")
+    .select("id, subject, topic_id, question_latex, solution_latex, has_star, parts")
     .eq("subject", subject)
     .or("concept_tags.eq.{},concept_tags.is.null")
     .limit(limit);
@@ -67,11 +101,12 @@ export async function POST(request: NextRequest) {
   for (const ex of exercises) {
     try {
       const topicName = getTopicName(ex.subject, ex.topic_id);
+      const { questionText, solutionText } = buildTexts(ex);
       const result = await populateExerciseData(
         ex.subject,
         topicName,
-        ex.question_latex,
-        ex.solution_latex,
+        questionText,
+        solutionText,
         taxonomy,
       );
 
@@ -84,7 +119,6 @@ export async function POST(request: NextRequest) {
         })
         .eq("id", ex.id);
     } catch {
-      // Claude failed (timeout, bad JSON, complex exercise) — save as open so it's not retried
       await supabase
         .from("exercises")
         .update({
