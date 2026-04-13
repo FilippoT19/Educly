@@ -124,36 +124,64 @@ function buildTexts(ex: ExerciseRow): { questionText: string; solutionText: stri
 
 // --- JSON repair for Claude's LaTeX output ---
 
+/** Extract the first balanced {...} block from Claude's response. */
+function extractJsonBlock(text: string): string {
+  const start = text.indexOf("{");
+  if (start === -1) throw new Error("No JSON object found in response");
+
+  let depth = 0;
+  let inString = false;
+  let i = start;
+
+  while (i < text.length) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === "\\") {
+        i += 2; // skip escaped char
+        continue;
+      }
+      if (ch === '"') inString = false;
+    } else {
+      if (ch === '"') inString = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) return text.slice(start, i + 1);
+      }
+    }
+    i++;
+  }
+  throw new Error("Unbalanced JSON braces in response");
+}
+
 function parseClaudeJson(raw: string): unknown {
+  const block = extractJsonBlock(raw);
+
   // Try parsing as-is first
   try {
-    return JSON.parse(raw);
+    return JSON.parse(block);
   } catch {
     // Claude sometimes writes single backslashes in LaTeX (\frac instead of \\frac).
-    // Strategy: inside JSON string values, replace every \ not already part of a valid
-    // two-char JSON escape with \\. We do this by scanning char-by-char.
+    // Fix: inside string values, double any backslash not part of a valid JSON escape.
     let out = "";
     let inString = false;
     let i = 0;
-    while (i < raw.length) {
-      const ch = raw[i];
+    while (i < block.length) {
+      const ch = block[i];
       if (!inString) {
         out += ch;
         if (ch === '"') inString = true;
         i++;
       } else {
         if (ch === "\\") {
-          const next = raw[i + 1];
+          const next = block[i + 1];
           if (next === undefined) {
             out += ch;
             i++;
           } else if ('"\\/bfnrtu'.includes(next)) {
-            // valid JSON escape — keep as-is, but \f/\b/\n/\r/\t in LaTeX context
-            // need to stay escaped so we just copy both chars
             out += ch + next;
             i += 2;
           } else {
-            // invalid escape — double the backslash
             out += "\\\\" + next;
             i += 2;
           }

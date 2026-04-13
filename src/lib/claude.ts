@@ -348,6 +348,46 @@ Regole di formato:
   return JSON.parse(jsonMatch[0]) as CorrectionResult;
 }
 
+function extractJsonBlock(text: string): string {
+  const start = text.indexOf("{");
+  if (start === -1) throw new Error("No JSON object found in response");
+  let depth = 0;
+  let inString = false;
+  let i = start;
+  while (i < text.length) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === "\\") { i += 2; continue; }
+      if (ch === '"') inString = false;
+    } else {
+      if (ch === '"') inString = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}") { depth--; if (depth === 0) return text.slice(start, i + 1); }
+    }
+    i++;
+  }
+  throw new Error("Unbalanced JSON braces in response");
+}
+
+function parseClaudeJson(raw: string): unknown {
+  const block = extractJsonBlock(raw);
+  try { return JSON.parse(block); } catch {
+    let out = "", inString = false, i = 0;
+    while (i < block.length) {
+      const ch = block[i];
+      if (!inString) { out += ch; if (ch === '"') inString = true; i++; }
+      else if (ch === "\\") {
+        const next = block[i + 1];
+        if (next === undefined) { out += ch; i++; }
+        else if ('"\\/bfnrtu'.includes(next)) { out += ch + next; i += 2; }
+        else { out += "\\\\" + next; i += 2; }
+      } else if (ch === '"') { out += ch; inString = false; i++; }
+      else { out += ch; i++; }
+    }
+    return JSON.parse(out);
+  }
+}
+
 export async function populateExerciseData(
   subject: string,
   topicName: string,
@@ -416,8 +456,5 @@ Regole:
   const content = response.content[0];
   if (content.type !== "text") throw new Error("Unexpected response type");
 
-  const jsonMatch = content.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("No JSON found in response");
-
-  return JSON.parse(jsonMatch[0]);
+  return parseClaudeJson(content.text);
 }
