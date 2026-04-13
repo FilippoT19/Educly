@@ -388,7 +388,7 @@ function ExerciseCard({ ex, secret, onDelete, onPopulated }: {
       {expanded && (
         <div className="border-t px-4 py-3 space-y-3">
           {/* Answers */}
-          {hasAnswers && (
+          {hasAnswer && (
             <div className="flex flex-wrap gap-2">
               {ex.answers!.map((a, i) => (
                 <div key={i} className="flex items-center gap-1.5 text-xs bg-muted/60 rounded-lg px-2.5 py-1.5">
