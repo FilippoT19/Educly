@@ -409,7 +409,7 @@ function ExerciseCard({ ex, secret, onDelete, onPopulated }: {
               </Field>
               <Field label="Soluzione (LaTeX)">
                 <textarea className="w-full border rounded-md px-3 py-2 text-sm font-mono min-h-32 resize-y"
-                  value={form.solution_latex} onChange={(e) => setForm({ ...form, solution_latex: e.target.value })} />
+                  value={form.solution_latex ?? ""} onChange={(e) => setForm({ ...form, solution_latex: e.target.value })} />
               </Field>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="Difficoltà">
