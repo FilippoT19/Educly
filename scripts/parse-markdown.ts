@@ -137,54 +137,80 @@ function splitIntoParts(text: string): { preamble: string; parts: Array<{ label:
 // ── Block identification ───────────────────────────────────────────────────────
 
 interface BlockBounds {
-  esempiStart: number;
-  esempiEnd: number;
-  exercisesStart: number;
+  /** Zones to scan for exercises/esempi: [start, end) line ranges, excluding solution sections. */
+  exerciseZones: Array<[number, number]>;
+  /** Start of the applications section (to scan separately), or -1 if none. */
   applicationsStart: number;
-  applicationsSubtopic: string | null;  // e.g. "1.1.B" extracted from "### 1.1.B. Applicazioni"
-  soluzioniStart: number;
+  applicationsSubtopic: string | null;
+  /** All solution sections: [start, end) line ranges. */
+  solutionRanges: Array<[number, number]>;
 }
 
 function identifyBlocks(lines: string[]): BlockBounds {
-  let esempiStart = -1;
-  let esempiEnd = -1;
-  let exercisesStart = -1;
+  // First pass: find all "## Soluzioni" starts and all section headings that could
+  // end a solution block (new top-level sections like "### 2.2.", "### 2.3.", "## Cap.")
+  // and find applications section (e.g. "### 1.1.B. Applicazioni fisiche").
+
   let applicationsStart = -1;
   let applicationsSubtopic: string | null = null;
-  let soluzioniStart = -1;
+
+  // Positions of every "## Soluzioni" heading
+  const soluzioniPositions: number[] = [];
+  // Positions of every heading that starts a new chapter section (### N.N.) or "## Cap."
+  const sectionHeadings: number[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
 
-    if (line === "## Esempi svolti" && esempiStart === -1) {
-      esempiStart = i + 1;
-      continue;
-    }
-    if (line === "## Esercizi" && exercisesStart === -1) {
-      exercisesStart = i + 1;
-      if (esempiStart !== -1 && esempiEnd === -1) esempiEnd = i;
-      continue;
-    }
-    // Section headings like "### 1.1.B. Applicazioni" or "### 1.2.E. Applicazioni fisiche"
-    // Only treat as applications if the heading contains "Applicazioni"
+    // Applications section (skip everything from here)
     const appMatch = line.match(/^#{2,3}\s+(\d+\.\d+\.[A-Z])\./);
     if (appMatch && line.includes("Applicazioni") && applicationsStart === -1) {
-      applicationsStart = i + 1;
-      applicationsSubtopic = appMatch[1];  // e.g. "1.1.B" or "1.2.E"
+      applicationsStart = i;
+      applicationsSubtopic = appMatch[1];
       continue;
     }
-    if (/^##\s+Soluzioni/.test(line) && soluzioniStart === -1) {
-      soluzioniStart = i + 1;
+
+    // "## Soluzioni §X.X" — start of a solution block
+    if (/^##\s+Soluzioni/.test(line)) {
+      soluzioniPositions.push(i + 1);
       continue;
+    }
+
+    // New major section heading "### X.Y." (chapter subsection) or "## Cap."
+    // These terminate a solution block
+    if (/^#{2,3}\s+(\d+\.\d+)\.\s/.test(line) || /^##\s+Cap\./.test(line)) {
+      sectionHeadings.push(i);
     }
   }
 
-  // Fallback: if no applications section, exercises go all the way to solutions
-  if (applicationsStart === -1) applicationsStart = soluzioniStart !== -1 ? soluzioniStart : lines.length;
-  if (soluzioniStart === -1) soluzioniStart = lines.length;
-  if (esempiEnd === -1) esempiEnd = exercisesStart !== -1 ? exercisesStart : lines.length;
+  // The "end of content" for exercises is the applications section or EOF
+  const contentEnd = applicationsStart !== -1 ? applicationsStart : lines.length;
 
-  return { esempiStart, esempiEnd, exercisesStart, applicationsStart, applicationsSubtopic, soluzioniStart };
+  // Build solution ranges: each "## Soluzioni" runs until the next section heading,
+  // the next "## Soluzioni", or EOF — NOT capped at contentEnd (solutions can appear after applications).
+  const solutionRanges: Array<[number, number]> = [];
+  for (const solStart of soluzioniPositions) {
+    const nextSection = sectionHeadings.find((h) => h > solStart);
+    const nextSol = soluzioniPositions.find((s) => s > solStart);
+    const candidates = [lines.length];
+    if (nextSection !== undefined) candidates.push(nextSection);
+    if (nextSol !== undefined) candidates.push(nextSol - 1);
+    const solEnd = Math.min(...candidates);
+    solutionRanges.push([solStart, solEnd]);
+  }
+
+  // Build exercise zones: parts of [0, contentEnd) NOT covered by solution ranges
+  const solutionRangesInContent = solutionRanges.filter(([s]) => s < contentEnd);
+  const exerciseZones: Array<[number, number]> = [];
+  let cursor = 0;
+  for (const [solStart, solEnd] of solutionRangesInContent) {
+    const zoneEnd = solStart - 1;
+    if (zoneEnd > cursor) exerciseZones.push([cursor, zoneEnd]);
+    cursor = Math.min(solEnd, contentEnd);
+  }
+  if (cursor < contentEnd) exerciseZones.push([cursor, contentEnd]);
+
+  return { exerciseZones, applicationsStart, applicationsSubtopic, solutionRanges };
 }
 
 // ── Exercise number detection ──────────────────────────────────────────────────
@@ -683,24 +709,32 @@ function main() {
 
   const blocks = identifyBlocks(lines);
   console.log(`\n  Block boundaries:`);
-  console.log(`    Esempi+Exercises: lines 0–${blocks.applicationsStart} (multi-section scan)`);
-  console.log(`    Applications:     lines ${blocks.applicationsStart}–${blocks.soluzioniStart}`);
-  console.log(`    Solutions:        lines ${blocks.soluzioniStart}–${lines.length}`);
+  console.log(`    Exercise zones:   ${blocks.exerciseZones.map(([s, e]) => `${s}–${e}`).join(", ")}`);
+  console.log(`    Solution ranges:  ${blocks.solutionRanges.map(([s, e]) => `${s}–${e}`).join(", ")}`);
+  console.log(`    Applications:     ${blocks.applicationsStart !== -1 ? `line ${blocks.applicationsStart}` : "none"}`);
 
-  if (blocks.exercisesStart === -1) console.warn("  ⚠ No '## Esercizi' found — scanning full file for exercises");
+  // Parse esempi and exercises from all exercise zones (excluding solution sections)
+  const rawEsempi = blocks.exerciseZones.flatMap(([s, e]) => parseEsempi(lines, s, e));
+  const rawExercises = blocks.exerciseZones.flatMap(([s, e]) => parseExerciseBlock(lines, s, e, false));
 
-  // Scan the full pre-applications range for both esempi and exercises.
-  // This handles files with multiple ## Esempi svolti / ## Esercizi sections,
-  // and sections where exercises appear without an ## Esercizi header (e.g. 1.2.D).
-  const rawEsempi = parseEsempi(lines, 0, blocks.applicationsStart);
+  // Parse applications section if present
+  const applicationsEnd = blocks.solutionRanges
+    .filter(([s]) => blocks.applicationsStart !== -1 && s > blocks.applicationsStart)
+    .map(([s]) => s)[0] ?? lines.length;
+  const rawApplications = blocks.applicationsStart !== -1
+    ? parseExerciseBlock(lines, blocks.applicationsStart, applicationsEnd, true)
+    : [];
 
-  const rawExercises = parseExerciseBlock(
-    lines, 0, blocks.applicationsStart, false
-  );
-  const rawApplications = parseExerciseBlock(
-    lines, blocks.applicationsStart, blocks.soluzioniStart, true
-  );
-  const solutions = parseSolutions(lines, blocks.soluzioniStart, lines.length);
+  // Merge solutions from all solution ranges
+  const solutions = new Map<string, string>();
+  for (const [s, e] of blocks.solutionRanges) {
+    for (const [k, v] of parseSolutions(lines, s, e)) solutions.set(k, v);
+  }
+  // Also include any solution text after the last solution range (edge case)
+  const lastSolEnd = blocks.solutionRanges.at(-1)?.[1] ?? 0;
+  if (lastSolEnd < lines.length && blocks.applicationsStart === -1) {
+    for (const [k, v] of parseSolutions(lines, lastSolEnd, lines.length)) solutions.set(k, v);
+  }
 
   console.log(`\n  Raw counts:`);
   console.log(`    ${rawEsempi.length} esempi`);
