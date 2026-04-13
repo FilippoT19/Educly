@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     .select("*")
     .eq("subject", subject)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(1000);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ exercises: data });
