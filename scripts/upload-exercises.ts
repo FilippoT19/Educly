@@ -79,6 +79,8 @@ function parseArgs() {
 async function getOrCreateSourceDocument(meta: {
   subject: string;
   source: string;
+  book: string | null;
+  author: string | null;
   chapter: string | null;
   sourceFile: string;
   sourceDocumentId?: string;
@@ -95,6 +97,8 @@ async function getOrCreateSourceDocument(meta: {
       title,
       subject: meta.subject,
       doc_type: meta.source,
+      book_title: meta.book ?? null,
+      author: meta.author ?? null,
       engineering: "tutti",
       section: "tutti",
     })
@@ -129,6 +133,8 @@ async function main() {
     meta: {
       subject: string;
       source: string;
+      book: string | null;
+      author: string | null;
       chapter: string | null;
       subtopic: string | null;
       sourceFile: string;

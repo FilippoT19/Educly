@@ -43,6 +43,8 @@ function parseArgs() {
     source: get("--source") ?? "eserciziario",
     chapter: get("--chapter"),
     subtopic: get("--subtopic"),
+    book: get("--book"),
+    author: get("--author"),
   };
 }
 
@@ -139,6 +141,7 @@ interface BlockBounds {
   esempiEnd: number;
   exercisesStart: number;
   applicationsStart: number;
+  applicationsSubtopic: string | null;  // e.g. "1.1.B" extracted from "### 1.1.B. Applicazioni"
   soluzioniStart: number;
 }
 
@@ -147,6 +150,7 @@ function identifyBlocks(lines: string[]): BlockBounds {
   let esempiEnd = -1;
   let exercisesStart = -1;
   let applicationsStart = -1;
+  let applicationsSubtopic: string | null = null;
   let soluzioniStart = -1;
 
   for (let i = 0; i < lines.length; i++) {
@@ -161,9 +165,11 @@ function identifyBlocks(lines: string[]): BlockBounds {
       if (esempiStart !== -1 && esempiEnd === -1) esempiEnd = i;
       continue;
     }
-    // Section headings like "### 1.1.B. Applicazioni" — letter sub-topic after digit.digit
-    if (/^#{2,3}\s+\d+\.\d+\.[A-Z]\./.test(line) && exercisesStart !== -1 && applicationsStart === -1) {
+    // Section headings like "### 1.1.B. Applicazioni" — extract subtopic id
+    const appMatch = line.match(/^#{2,3}\s+(\d+\.\d+\.[A-Z])\./);
+    if (appMatch && exercisesStart !== -1 && applicationsStart === -1) {
       applicationsStart = i + 1;
+      applicationsSubtopic = appMatch[1];  // e.g. "1.1.B"
       continue;
     }
     if (/^##\s+Soluzioni/.test(line) && soluzioniStart === -1) {
@@ -177,7 +183,7 @@ function identifyBlocks(lines: string[]): BlockBounds {
   if (soluzioniStart === -1) soluzioniStart = lines.length;
   if (esempiEnd === -1) esempiEnd = exercisesStart !== -1 ? exercisesStart : lines.length;
 
-  return { esempiStart, esempiEnd, exercisesStart, applicationsStart, soluzioniStart };
+  return { esempiStart, esempiEnd, exercisesStart, applicationsStart, applicationsSubtopic, soluzioniStart };
 }
 
 // ── Exercise number detection ──────────────────────────────────────────────────
@@ -632,7 +638,7 @@ ${rows}
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 function main() {
-  const { file, subject, source, chapter, subtopic } = parseArgs();
+  const { file, subject, source, chapter, subtopic, book, author } = parseArgs();
 
   if (!file) {
     console.error(
@@ -688,7 +694,7 @@ function main() {
 
   const esempiItems = buildEsempiItems(rawEsempi, subtopic);
   const exerciseItems = buildItems(rawExercises, solutions, "exercise", subtopic);
-  const applicationItems = buildItems(rawApplications, solutions, "application", subtopic);
+  const applicationItems = buildItems(rawApplications, solutions, "application", blocks.applicationsSubtopic ?? subtopic);
 
   const allItems = [...esempiItems, ...exerciseItems, ...applicationItems];
 
@@ -720,6 +726,8 @@ function main() {
     meta: {
       subject,
       source,
+      book: book ?? null,
+      author: author ?? null,
       chapter: chapter ?? null,
       subtopic: subtopic ?? null,
       sourceFile: file,
