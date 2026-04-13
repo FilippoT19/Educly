@@ -178,7 +178,17 @@ function parseClaudeJson(raw: string): unknown {
           if (next === undefined) {
             out += ch;
             i++;
-          } else if ('"\\/bfnrtu'.includes(next)) {
+          } else if (next === "u") {
+            // \uXXXX is only valid if followed by exactly 4 hex digits
+            const hex = block.slice(i + 2, i + 6);
+            if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+              out += ch + next + hex;
+              i += 6;
+            } else {
+              out += "\\\\" + next;
+              i += 2;
+            }
+          } else if ('"\\/bfnrt'.includes(next)) {
             out += ch + next;
             i += 2;
           } else {
