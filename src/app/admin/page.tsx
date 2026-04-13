@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useId } from "react";
+import React, { useState, useEffect, useCallback, useId, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -167,49 +167,107 @@ function ResourceCard({ resource, onClick }: { resource: SourceDocument; onClick
   );
 }
 
-// ── Populate all button (batches of 5) ───────────────────────────────────────
+// ── Populate button with configurable batch size and auto-loop ────────────────
 function PopulateAllButton({ subject, secret, onDone }: { subject: string; secret: string; onDone: () => void }) {
   const [running, setRunning] = useState(false);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [processed, setProcessed] = useState(0);
+  const [batchSize, setBatchSize] = useState(10);
+  const stopRef = useRef(false);
 
-  async function runBatch() {
-    setRunning(true);
+  async function runBatch(limit: number): Promise<{ processed: number; remaining: number }> {
     const res = await fetch("/api/admin/exercises/populate", {
       method: "POST",
       headers: { "content-type": "application/json", "x-admin-secret": secret },
-      body: JSON.stringify({ subject, limit: 5 }),
+      body: JSON.stringify({ subject, limit }),
     });
-    const data = await res.json();
-    if (res.ok) {
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  async function runOnce() {
+    setRunning(true);
+    stopRef.current = false;
+    try {
+      const data = await runBatch(batchSize);
       setProcessed((p) => p + (data.processed ?? 0));
       setRemaining(data.remaining ?? 0);
       onDone();
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function runAll() {
+    setRunning(true);
+    stopRef.current = false;
+    let rem = Infinity;
+    let total = 0;
+    while (rem > 0 && !stopRef.current) {
+      try {
+        const data = await runBatch(batchSize);
+        total += data.processed ?? 0;
+        rem = data.remaining ?? 0;
+        setProcessed((p) => p + (data.processed ?? 0));
+        setRemaining(rem);
+        onDone();
+        if ((data.processed ?? 0) === 0) break;
+      } catch {
+        break;
+      }
     }
     setRunning(false);
   }
 
+  function stop() { stopRef.current = true; }
+
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-wrap">
       {processed > 0 && (
         <span className="text-xs text-muted-foreground">{processed} popolati</span>
       )}
       {remaining !== null && remaining > 0 && (
-        <span className="text-xs text-orange-600">{remaining} rimasti</span>
+        <span className="text-xs text-orange-500">{remaining} rimasti</span>
       )}
       {remaining === 0 && processed > 0 && (
-        <span className="text-xs text-green-700">✓ Completato</span>
+        <span className="text-xs text-green-600">✓ Completato</span>
       )}
-      <Button
-        size="sm" variant="outline"
-        onClick={runBatch}
-        disabled={running || remaining === 0}
-        className="gap-1.5"
-      >
-        {running
-          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Popolo 5…</>
-          : <><Zap className="h-3.5 w-3.5 text-amber-500" />{remaining === null ? "Popola 5" : "Popola altri 5"}</>}
-      </Button>
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-muted-foreground">Batch:</span>
+        <input
+          type="number"
+          min={1}
+          max={20}
+          value={batchSize}
+          onChange={(e) => setBatchSize(Math.max(1, Math.min(20, Number(e.target.value))))}
+          disabled={running}
+          className="w-12 text-xs text-center border border-border rounded px-1 py-0.5 bg-background"
+        />
+      </div>
+      {running ? (
+        <Button size="sm" variant="outline" onClick={stop} className="gap-1.5">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />Stop
+        </Button>
+      ) : (
+        <>
+          <Button
+            size="sm" variant="outline"
+            onClick={runOnce}
+            disabled={remaining === 0}
+            className="gap-1.5"
+          >
+            <Zap className="h-3.5 w-3.5 text-amber-500" />Popola {batchSize}
+          </Button>
+          <Button
+            size="sm" variant="outline"
+            onClick={runAll}
+            disabled={remaining === 0}
+            className="gap-1.5"
+          >
+            <Zap className="h-3.5 w-3.5 text-amber-500" />Popola tutti
+          </Button>
+        </>
+      )}
     </div>
   );
 }
