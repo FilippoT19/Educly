@@ -541,24 +541,27 @@ export function PracticeSession({
     setShowReportModal(false);
     setReportSent(true);
 
-    // Mark as correct in UI immediately
-    if (checkResult) {
-      const corrected: AnswerCheckResult = {
-        ...checkResult,
-        isCorrect: true,
-        answerComparisons: checkResult.answerComparisons?.map(c => ({ ...c, isCorrect: true })),
-      };
-      setCheckResult(corrected);
-      const score = hintsUsed ? 70 : 100;
-      setFinalScore(score);
-      // Move to solution view if still in step_review
-      if (phase === "step_review") setPhase("solution");
-      // Re-save with correct = true (bypass savedRef guard)
-      savedRef.current = false;
-      saveResult(corrected, score);
+    // Void the result: prevent saving if not yet saved, undo if already saved
+    const wasCorrect = checkResult?.isCorrect ?? false;
+    if (savedRef.current) {
+      // Already saved — undo it
+      fetch("/api/exercise/void", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          exerciseId: currentExerciseId,
+          subject,
+          topicId: topic.id,
+          wasCorrect,
+        }),
+      }).catch(() => {});
+    } else {
+      // Not yet saved — block saving
+      savedRef.current = true;
     }
 
-    await fetch("/api/exercise/report", {
+    // Send report to admin
+    fetch("/api/exercise/report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -911,7 +914,7 @@ export function PracticeSession({
                 />
                 {reportSent && (
                   <p className="text-xs text-muted-foreground px-1">
-                    Segnalazione inviata. Grazie!
+                    Risultato annullato. Segnalazione inviata.
                   </p>
                 )}
               </div>

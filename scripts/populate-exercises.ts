@@ -188,7 +188,7 @@ function parseClaudeJson(raw: string): unknown {
               out += "\\\\" + next;
               i += 2;
             }
-          } else if ('"\\/bfnrt'.includes(next)) {
+          } else if ('"\\/' .includes(next)) {
             out += ch + next;
             i += 2;
           } else {
