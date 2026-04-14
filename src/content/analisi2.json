@@ -32,11 +32,6 @@
     "calcolo_aree",
     "calcolo_volumi_2d",
     "jacobiano_cambio_variabile",
-    "integrale_triplo",
-    "coordinate_cilindriche",
-    "coordinate_sferiche",
-    "calcolo_volumi_3d",
-    "calcolo_masse_momenti",
     "curve_parametriche",
     "lunghezza_arco",
     "integrale_curvilineo_prima_specie",
@@ -49,12 +44,6 @@
     "potenziale_scalare",
     "criterio_esattezza",
     "teorema_gauss_green",
-    "superfici_parametriche",
-    "area_superficie",
-    "integrale_superficie",
-    "flusso_campo_vettoriale",
-    "teorema_stokes",
-    "teorema_divergenza",
     "edo_primo_ordine",
     "separazione_variabili",
     "edo_lineare_primo_ordine",
@@ -62,130 +51,85 @@
     "edo_lineare_secondo_ordine",
     "equazione_caratteristica",
     "soluzione_particolare_edo",
-    "equazione_bernoulli",
     "problema_cauchy",
-    "sistemi_edo",
-    "convergenza_puntuale",
-    "convergenza_uniforme",
-    "criterio_weierstrass",
-    "serie_potenze",
-    "raggio_convergenza",
-    "derivazione_integrazione_serie",
-    "serie_taylor",
-    "serie_maclaurin",
     "serie_fourier",
     "coefficienti_fourier",
-    "teorema_parseval",
-    "convergenza_L2"
-  ],
-  "macroCategories": [
-    {
-      "id": "funzioni_differenziale",
-      "name": "Funzioni e calcolo differenziale",
-      "topicIds": ["funzioni_piu_variabili", "derivate_parziali"],
-      "suggestedTags": ["topologia in Rn", "limiti in più variabili", "continuità in più variabili", "curve di livello", "derivate parziali", "gradiente", "differenziabilità", "piano tangente", "derivate direzionali", "derivate di ordine superiore", "teorema di Schwarz", "jacobiana", "formula della catena", "sviluppo di Taylor in più variabili"]
-    },
-    {
-      "id": "ottimizzazione",
-      "name": "Ottimizzazione",
-      "topicIds": ["ottimizzazione"],
-      "suggestedTags": ["punti critici", "matrice hessiana", "massimi e minimi liberi", "moltiplicatori di Lagrange", "vincoli di uguaglianza", "vincoli di disuguaglianza", "ottimizzazione su domini compatti", "condizioni del secondo ordine"]
-    },
-    {
-      "id": "integrali_multipli",
-      "name": "Integrali multipli",
-      "topicIds": ["integrali_doppi", "integrali_tripli"],
-      "suggestedTags": ["integrale doppio", "teorema di Fubini", "domini normali", "cambio di variabile", "coordinate polari", "jacobiano", "integrale triplo", "coordinate cilindriche", "coordinate sferiche", "calcolo di aree", "calcolo di volumi", "calcolo di masse e momenti"]
-    },
-    {
-      "id": "campi_superfici",
-      "name": "Curve, campi e superfici",
-      "topicIds": ["curve_integrali_curvilinei", "campi_vettoriali", "superfici"],
-      "suggestedTags": ["curve parametriche", "lunghezza d'arco", "integrale curvilineo di prima specie", "lavoro", "integrale curvilineo di seconda specie", "forme differenziali", "divergenza", "rotore", "gradiente", "campi conservativi", "potenziale", "criterio di esattezza", "teorema di Gauss-Green", "superfici parametriche", "area di una superficie", "integrale di superficie", "flusso", "teorema di Stokes", "teorema della divergenza"]
-    },
-    {
-      "id": "edo",
-      "name": "Equazioni differenziali",
-      "topicIds": ["edo"],
-      "suggestedTags": ["EDO del primo ordine", "separazione di variabili", "EDO lineare del primo ordine", "variazione delle costanti", "EDO lineare del secondo ordine", "coefficienti costanti", "equazione caratteristica", "soluzione particolare", "equazione di Bernoulli", "problema di Cauchy", "sistemi di EDO", "EDO autonome"]
-    },
-    {
-      "id": "serie_funzioni",
-      "name": "Serie di funzioni",
-      "topicIds": ["serie_funzioni"],
-      "suggestedTags": ["convergenza puntuale", "convergenza uniforme", "criterio di Weierstrass", "serie di potenze", "raggio di convergenza", "derivazione e integrazione di serie", "serie di Taylor", "serie di MacLaurin", "serie di Fourier", "coefficienti di Fourier", "teorema di Parseval", "convergenza in norma L2", "serie di seni", "serie di coseni"]
-    }
+    "convergenza_puntuale",
+    "convergenza_uniforme",
+    "serie_potenze",
+    "raggio_convergenza",
+    "serie_taylor"
   ],
   "topics": [
     {
-      "id": "funzioni_piu_variabili",
-      "name": "Funzioni di più variabili",
+      "id": "curve_integrali_curvilinei",
+      "name": "Curve",
       "order": 1,
-      "subtopics": ["Topologia in R^n", "Limiti e continuità", "Curve di livello", "Limiti notevoli in più variabili"],
-      "concepts": ["topologia_Rn", "insiemi_aperti_chiusi", "limiti_piu_variabili", "continuita_piu_variabili", "curve_di_livello"]
+      "subtopics": ["Curve parametriche", "Vettore tangente", "Regolarità", "Lunghezza di una curva", "Integrale curvilineo di prima specie"],
+      "concepts": ["curve_parametriche", "lunghezza_arco", "integrale_curvilineo_prima_specie"]
+    },
+    {
+      "id": "funzioni_piu_variabili",
+      "name": "Funzioni a due variabili",
+      "order": 2,
+      "subtopics": ["Dominio e proprietà", "Curve di livello", "Superfici di livello", "Topologia in R^n"],
+      "concepts": ["topologia_Rn", "insiemi_aperti_chiusi", "curve_di_livello"]
+    },
+    {
+      "id": "limiti_piu_variabili",
+      "name": "Limiti a due variabili",
+      "order": 3,
+      "subtopics": ["Calcolo di limiti", "Limiti inesistenti", "Continuità", "Estensione per continuità"],
+      "concepts": ["limiti_piu_variabili", "continuita_piu_variabili"]
     },
     {
       "id": "derivate_parziali",
-      "name": "Derivate Parziali e Differenziale",
-      "order": 2,
-      "subtopics": ["Derivate parziali", "Gradiente", "Differenziabilità", "Piano tangente", "Derivate direzionali", "Derivate di ordine superiore", "Teorema di Schwarz"],
+      "name": "Calcolo differenziale",
+      "order": 4,
+      "subtopics": ["Derivate parziali", "Gradiente", "Differenziabilità", "Piano tangente", "Derivate direzionali", "Derivate di ordine superiore", "Teorema di Schwarz", "Formula della catena", "Taylor in più variabili"],
       "concepts": ["derivate_parziali", "gradiente", "differenziabilita", "piano_tangente", "derivate_direzionali", "derivate_ordine_superiore", "teorema_schwarz", "matrice_jacobiana", "formula_catena", "sviluppo_taylor_piu_variabili"]
     },
     {
       "id": "ottimizzazione",
-      "name": "Ottimizzazione",
-      "order": 3,
-      "subtopics": ["Punti critici", "Matrice Hessiana", "Massimi e minimi liberi", "Moltiplicatori di Lagrange", "Massimi e minimi vincolati"],
+      "name": "Estremi",
+      "order": 5,
+      "subtopics": ["Punti critici", "Matrice Hessiana", "Massimi e minimi liberi", "Moltiplicatori di Lagrange", "Ottimizzazione su domini compatti"],
       "concepts": ["punti_critici", "matrice_hessiana", "massimi_minimi_liberi", "moltiplicatori_lagrange", "ottimizzazione_domini_compatti", "condizioni_secondo_ordine"]
     },
     {
+      "id": "edo_primo_ordine",
+      "name": "Equazioni differenziali (1° ordine)",
+      "order": 6,
+      "subtopics": ["Separazione di variabili", "EDO lineare del primo ordine", "Variazione delle costanti", "Equazione di Bernoulli", "Problema di Cauchy"],
+      "concepts": ["edo_primo_ordine", "separazione_variabili", "edo_lineare_primo_ordine", "variazione_costanti", "problema_cauchy"]
+    },
+    {
+      "id": "edo_secondo_ordine",
+      "name": "Equazioni differenziali (2° ordine)",
+      "order": 7,
+      "subtopics": ["EDO lineare del secondo ordine", "Equazione caratteristica", "Soluzione particolare", "Metodo di variazione delle costanti"],
+      "concepts": ["edo_lineare_secondo_ordine", "equazione_caratteristica", "soluzione_particolare_edo"]
+    },
+    {
+      "id": "campi_vettoriali",
+      "name": "Campi vettoriali",
+      "order": 8,
+      "subtopics": ["Divergenza e rotore", "Campi conservativi", "Potenziale scalare", "Criterio di esattezza", "Teorema di Gauss-Green"],
+      "concepts": ["divergenza", "rotore", "campi_conservativi", "potenziale_scalare", "criterio_esattezza", "teorema_gauss_green"]
+    },
+    {
       "id": "integrali_doppi",
-      "name": "Integrali Doppi",
-      "order": 4,
+      "name": "Integrali doppi",
+      "order": 9,
       "subtopics": ["Integrale doppio su rettangolo", "Teorema di Fubini", "Domini normali", "Cambio di variabili", "Coordinate polari", "Applicazioni geometriche"],
       "concepts": ["integrale_doppio", "teorema_fubini", "domini_normali", "cambio_variabile_2d", "coordinate_polari", "calcolo_aree", "calcolo_volumi_2d", "jacobiano_cambio_variabile"]
     },
     {
-      "id": "integrali_tripli",
-      "name": "Integrali Tripli",
-      "order": 5,
-      "subtopics": ["Integrale triplo", "Coordinate cilindriche", "Coordinate sferiche", "Applicazioni"],
-      "concepts": ["integrale_triplo", "coordinate_cilindriche", "coordinate_sferiche", "calcolo_volumi_3d", "calcolo_masse_momenti"]
-    },
-    {
-      "id": "curve_integrali_curvilinei",
-      "name": "Curve e Integrali Curvilinei",
-      "order": 6,
-      "subtopics": ["Curve parametriche", "Lunghezza di una curva", "Integrale curvilineo di prima specie", "Integrale curvilineo di seconda specie (lavoro)", "Forme differenziali"],
-      "concepts": ["curve_parametriche", "lunghezza_arco", "integrale_curvilineo_prima_specie", "integrale_curvilineo_seconda_specie", "lavoro_lungo_curva", "forme_differenziali"]
-    },
-    {
-      "id": "campi_vettoriali",
-      "name": "Campi Vettoriali",
-      "order": 7,
-      "subtopics": ["Divergenza e rotore", "Campi conservativi", "Potenziale", "Criterio di esattezza"],
-      "concepts": ["divergenza", "rotore", "campi_conservativi", "potenziale_scalare", "criterio_esattezza", "teorema_gauss_green"]
-    },
-    {
-      "id": "superfici",
-      "name": "Superfici e Integrali di Superficie",
-      "order": 8,
-      "subtopics": ["Superfici parametriche", "Area di una superficie", "Integrale di superficie", "Teorema di Gauss-Green", "Teorema di Stokes", "Teorema della divergenza"],
-      "concepts": ["superfici_parametriche", "area_superficie", "integrale_superficie", "flusso_campo_vettoriale", "teorema_stokes", "teorema_divergenza"]
-    },
-    {
-      "id": "edo",
-      "name": "Equazioni Differenziali Ordinarie",
-      "order": 9,
-      "subtopics": ["EDO del primo ordine", "Separazione di variabili", "EDO lineari del primo ordine", "EDO lineari del secondo ordine", "Equazione di Bernoulli", "Problema di Cauchy"],
-      "concepts": ["edo_primo_ordine", "separazione_variabili", "edo_lineare_primo_ordine", "variazione_costanti", "edo_lineare_secondo_ordine", "equazione_caratteristica", "soluzione_particolare_edo", "equazione_bernoulli", "problema_cauchy", "sistemi_edo"]
-    },
-    {
-      "id": "serie_funzioni",
-      "name": "Serie di Funzioni",
+      "id": "serie_fourier",
+      "name": "Serie di Fourier",
       "order": 10,
-      "subtopics": ["Convergenza puntuale e uniforme", "Serie di potenze", "Raggio di convergenza", "Serie di Taylor", "Serie di Fourier"],
-      "concepts": ["convergenza_puntuale", "convergenza_uniforme", "criterio_weierstrass", "serie_potenze", "raggio_convergenza", "derivazione_integrazione_serie", "serie_taylor", "serie_maclaurin", "serie_fourier", "coefficienti_fourier", "teorema_parseval", "convergenza_L2"]
+      "subtopics": ["Convergenza puntuale e uniforme", "Coefficienti di Fourier", "Serie di seni e coseni", "Teorema di Parseval", "Serie di Taylor e MacLaurin"],
+      "concepts": ["serie_fourier", "coefficienti_fourier", "convergenza_puntuale", "convergenza_uniforme", "serie_potenze", "raggio_convergenza", "serie_taylor"]
     }
   ]
 }

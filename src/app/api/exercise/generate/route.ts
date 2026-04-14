@@ -6,7 +6,7 @@ import { getPostHogClient } from "@/lib/posthog-server";
 import analisi1 from "@/content/analisi1.json";
 import analisi2 from "@/content/analisi2.json";
 
-const curricula: Record<string, typeof analisi1> = { analisi1, analisi2 };
+const curricula: Record<string, typeof analisi1> = { analisi1, analisi2: analisi2 as unknown as typeof analisi1 };
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -92,10 +92,8 @@ export async function POST(request: NextRequest) {
     return q.limit(10);
   };
 
-  let { data: dbExercises } = await buildDbQuery(1);
-  if (!dbExercises || dbExercises.length === 0) {
-    ({ data: dbExercises } = await buildDbQuery());
-  }
+  // Only serve priority=1 (professor-curated) exercises — never fall back to book exercises
+  const { data: dbExercises } = await buildDbQuery(1);
 
   if (dbExercises && dbExercises.length > 0) {
     // Pick a random one from results

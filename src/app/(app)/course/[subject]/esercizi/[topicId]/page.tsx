@@ -9,7 +9,7 @@ import analisi2 from "@/content/analisi2.json";
 
 const curricula: Record<string, typeof analisi1> = {
   analisi1: analisi1 as typeof analisi1,
-  analisi2: analisi2 as typeof analisi1,
+  analisi2: analisi2 as unknown as typeof analisi1,
 };
 
 interface PageProps {

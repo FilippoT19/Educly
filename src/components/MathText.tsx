@@ -38,6 +38,13 @@ export function MathText({ text, className }: MathTextProps) {
         }
       });
 
+      // Strip markdown formatting from AI responses
+      processed = processed
+        .replace(/^#{1,6}\s+(.+)$/gm, "<strong>$1</strong>")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.+?)\*/g, "<em>$1</em>")
+        .replace(/^[-*]\s+/gm, "• ");
+
       // Convert markdown images ![alt](url) to <img>
       processed = processed.replace(
         /!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g,

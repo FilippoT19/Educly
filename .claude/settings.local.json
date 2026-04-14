@@ -1,13 +1,31 @@
 {
-    "$schema": "https://json.schemastore.org/claude-code-settings.json",
-    "permissions": {
-        "defaultMode": "acceptEdits",
-        "allow": [
-            "Bash(node *)",
-            "Bash(npx *)",
-            "Bash(npm *)",
-            "Bash(git add *)",
-            "Bash(git pull *)"
-        ]
-    }
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(node *)",
+      "Bash(npx *)",
+      "Bash(npm *)",
+      "Bash(git add *)",
+      "Bash(git pull *)",
+      "Bash(npx ts-node:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npx tsc:*)",
+      "Bash(next build:*)",
+      "Bash(npx next:*)",
+      "Bash(npm run:*)",
+      "Bash(node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(grep -v \"^\\(node\\\\|Reparsing\\\\|To eliminate\\\\|Use \\\\`node\\\\|◇\\)\")",
+      "Bash(grep -v \"Warning\\\\|Reparsing\\\\|◇\\\\|eliminate\\\\|Use \\\\`\")",
+      "Bash(grep -v \"Warning:\\\\|Reparsing\\\\|◇\\\\|eliminate\\\\|Use \\\\`\")",
+      "Bash(node node_modules/next/dist/bin/next build)",
+      "Bash(git checkout:*)",
+      "Bash(find /Users/filippotopinelli/Desktop/Educly -type f -name *.sql)",
+      "Bash(grep -l \"CREATE TABLE.*exercises\" /Users/filippotopinelli/Desktop/Educly/supabase/*.sql)",
+      "Bash(grep -n \"exercises\" /Users/filippotopinelli/Desktop/Educly/supabase/*.sql)",
+      "Bash(grep -n priority /Users/filippotopinelli/Desktop/Educly/src/app/api/admin/*.ts)"
+    ],
+    "defaultMode": "acceptEdits"
+  }
 }

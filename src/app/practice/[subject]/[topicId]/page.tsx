@@ -6,7 +6,7 @@ import analisi2 from "@/content/analisi2.json";
 
 const curricula: Record<string, typeof analisi1> = {
   analisi1: analisi1 as typeof analisi1,
-  analisi2: analisi2 as typeof analisi1,
+  analisi2: analisi2 as unknown as typeof analisi1,
 };
 
 interface PageProps {
@@ -25,15 +25,8 @@ export default async function PracticePage({ params, searchParams }: PageProps) 
   const curriculum = curricula[subject];
   if (!curriculum) redirect("/dashboard");
 
-  // topicId might be a macro category id — find the right topic for stats
-  const topic =
-    curriculum.topics.find((t) => t.id === topicId) ??
-    (() => {
-      const cat = curriculum.macroCategories?.find((c) => c.id === topicId);
-      return cat ? curriculum.topics.find((t) => t.id === cat.topicIds[0]) : null;
-    })();
-
-  if (!topic) redirect(`/course/${subject}/esercizi`);
+  const topic = curriculum.topics.find((t) => t.id === topicId);
+  if (!topic) redirect(`/course/${subject}`);
 
   const { data: stats } = await supabase
     .from("topic_stats")
@@ -43,7 +36,7 @@ export default async function PracticePage({ params, searchParams }: PageProps) 
     .eq("topic_id", topic.id)
     .single();
 
-  const backHref = back ?? `/course/${subject}/esercizi/${topicId}`;
+  const backHref = back ?? `/course/${subject}`;
 
   return (
     <PracticeSession

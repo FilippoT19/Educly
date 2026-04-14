@@ -4,7 +4,7 @@ import { populateExerciseData } from "@/lib/claude";
 import analisi1 from "@/content/analisi1.json";
 import analisi2 from "@/content/analisi2.json";
 
-const curricula: Record<string, typeof analisi1 & { conceptTaxonomy?: string[] }> = { analisi1, analisi2 };
+const curricula: Record<string, typeof analisi1 & { conceptTaxonomy?: string[] }> = { analisi1, analisi2: analisi2 as unknown as (typeof analisi1 & { conceptTaxonomy?: string[] }) };
 
 function isAdmin(req: NextRequest) {
   return req.headers.get("x-admin-secret") === process.env.ADMIN_SECRET;
@@ -15,7 +15,7 @@ function getTopicName(subject: string, topicId: string): string {
 }
 
 function getConceptTaxonomy(subject: string): string[] {
-  const curriculum = curricula[subject] as typeof analisi2 | undefined;
+  const curriculum = curricula[subject] as unknown as typeof analisi2 | undefined;
   return curriculum && "conceptTaxonomy" in curriculum ? curriculum.conceptTaxonomy : [];
 }
 
