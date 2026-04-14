@@ -198,8 +198,9 @@ export interface SolutionStep {
 
 export interface ExerciseAnswer {
   label: string;    // "Risultato", "a)", "b)", etc.
-  type: "exact" | "open" | "self_check";
-  value?: string;   // expected answer for exact type (normalized, no LaTeX delimiters)
+  type: "exact" | "open" | "self_check" | "choice";
+  value?: string;   // correct answer (for exact/choice)
+  options?: string[]; // available choices (for choice type only)
 }
 
 export interface AnswerComparison {

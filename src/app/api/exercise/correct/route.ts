@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json(result);
         }
 
-        const allExact = answers.every((a) => a.type === "exact");
+        const allExact = answers.every((a) => a.type === "exact" || a.type === "choice");
 
         if (allExact) {
           if (answers.length === 1) {

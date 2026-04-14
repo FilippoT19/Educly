@@ -29,8 +29,8 @@ export async function POST(request: NextRequest) {
       .single();
     if (!ex) return NextResponse.json({ error: "Esercizio non trovato" }, { status: 404 });
     const answers = ex.answers || [];
-    const exactAnswers = Array.isArray(answers) ? answers.filter((a: { type: string }) => a.type === "exact") : [];
-    const hasSelfCheck = Array.isArray(answers) && answers.some((a: { type: string }) => a.type === "self_check");
+    const allAnswers: { type: string; label: string; options?: string[] }[] = Array.isArray(answers) ? answers : [];
+    const hasSelfCheck = allAnswers.some((a) => a.type === "self_check");
     return NextResponse.json({
       id: ex.id,
       text: ex.question_latex,
@@ -43,8 +43,9 @@ export async function POST(request: NextRequest) {
       solutionExact: ex.solution_exact || null,
       solutionSteps: ex.solution_steps || [],
       conceptTags: ex.concept_tags || [],
-      answerCount: hasSelfCheck ? 1 : exactAnswers.length,
-      answerLabels: hasSelfCheck ? ["Risposta"] : exactAnswers.map((a: { label: string }) => a.label || "Risultato"),
+      answerCount: hasSelfCheck ? 1 : Math.max(allAnswers.length, 1),
+      answerLabels: hasSelfCheck ? ["Risposta"] : allAnswers.map((a) => a.label || "Risultato"),
+      answerOptions: hasSelfCheck ? [null] : allAnswers.map((a) => a.options ?? null),
     });
   }
 
@@ -106,8 +107,8 @@ export async function POST(request: NextRequest) {
       .upsert({ student_id: user.id, exercise_id: picked.id });
 
     const pickedAnswers = picked.answers || [];
-    const pickedExact = Array.isArray(pickedAnswers) ? pickedAnswers.filter((a: { type: string }) => a.type === "exact") : [];
-    const pickedSelfCheck = Array.isArray(pickedAnswers) && pickedAnswers.some((a: { type: string }) => a.type === "self_check");
+    const pickedAll: { type: string; label: string; options?: string[] }[] = Array.isArray(pickedAnswers) ? pickedAnswers : [];
+    const pickedSelfCheck = pickedAll.some((a) => a.type === "self_check");
     return NextResponse.json({
       id: picked.id,
       text: picked.question_latex,
@@ -120,8 +121,9 @@ export async function POST(request: NextRequest) {
       solutionExact: picked.solution_exact || null,
       solutionSteps: picked.solution_steps || [],
       conceptTags: picked.concept_tags || [],
-      answerCount: pickedSelfCheck ? 1 : pickedExact.length,
-      answerLabels: pickedSelfCheck ? ["Risposta"] : pickedExact.map((a: { label: string }) => a.label || "Risultato"),
+      answerCount: pickedSelfCheck ? 1 : Math.max(pickedAll.length, 1),
+      answerLabels: pickedSelfCheck ? ["Risposta"] : pickedAll.map((a) => a.label || "Risultato"),
+      answerOptions: pickedSelfCheck ? [null] : pickedAll.map((a) => a.options ?? null),
     });
   }
 

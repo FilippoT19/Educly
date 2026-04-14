@@ -21,275 +21,240 @@ const DRY_RUN = process.argv.includes("--dry-run");
 
 interface Answer {
   label: string;
-  type: "exact" | "self_check";
+  type: "exact" | "self_check" | "choice";
   value?: string;
+  options?: string[];
 }
+
+// Shorthand helpers
+const yn = (label: string, value: "si" | "no"): Answer =>
+  ({ label, type: "choice", value, options: ["si", "no"] });
+
+const choose = (label: string, value: string, options: string[]): Answer =>
+  ({ label, type: "choice", value, options });
+
+const exact = (label: string, value: string): Answer =>
+  ({ label, type: "exact", value });
+
+const selfCheck = (label: string): Answer =>
+  ({ label, type: "self_check" });
 
 interface ExerciseSeed {
   exercise_number: string;
   answers: Answer[];
 }
 
+const OAC = ["aperto", "chiuso", "né aperto né chiuso"]; // open/closed/neither options
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FILE 1 — 01 esercizi curve.md
 // ─────────────────────────────────────────────────────────────────────────────
-// exercise_number pattern: "01_esercizi_curve_N"
 
 const curveAnswers: ExerciseSeed[] = [
   {
-    // γ: cos t + t sin t, sin t - t cos t, -π ≤ t ≤ π
-    // Chiusa: no (γ(-π)≠γ(π)), tangente=(t cos t, t sin t), modulo=|t|, non regolare
+    // γ: cos t+t sin t, sin t−t cos t, −π≤t≤π
+    // Chiusa: no; modulo=|t|; non regolare
     exercise_number: "01_esercizi_curve_1",
     answers: [
-      { label: "La curva è chiusa?", type: "exact", value: "no" },
-      { label: "Modulo del vettore tangente |γ'(t)|", type: "exact", value: "|t|" },
-      { label: "La curva è regolare?", type: "exact", value: "no" },
+      yn("La curva è chiusa?", "no"),
+      exact("Modulo del vettore tangente |γ'(t)|", "|t|"),
+      yn("La curva è regolare?", "no"),
     ],
   },
   {
-    // ρ = sin²(θ/2), θ∈[0,2π]
-    // Chiusa: sì (γ(0)=γ(2π)=(0,0)), |γ'(θ)|=|sin(θ/2)|, non regolare in (0,0)
+    // ρ=sin²(θ/2), θ∈[0,2π]
+    // Chiusa: sì; |γ'(θ)|=|sin(θ/2)|; non regolare
     exercise_number: "01_esercizi_curve_2",
     answers: [
-      { label: "La curva è chiusa?", type: "exact", value: "si" },
-      { label: "Modulo del vettore tangente |γ'(θ)|", type: "exact", value: "|sin(θ/2)|" },
-      { label: "La curva è regolare?", type: "exact", value: "no" },
+      yn("La curva è chiusa?", "si"),
+      exact("Modulo |γ'(θ)|", "|sin(θ/2)|"),
+      yn("La curva è regolare?", "no"),
     ],
   },
   {
-    // r(t)=t²i+t³j, -1≤t≤1   →   L = (2/27)(13√13 - 8)
+    // r(t)=t²i+t³j, −1≤t≤1 → L=(2/27)(13√13−8)
     exercise_number: "01_esercizi_curve_3",
-    answers: [
-      { label: "Lunghezza L", type: "exact", value: "\\frac{2(13\\sqrt{13}-8)}{27}" },
-    ],
+    answers: [exact("Lunghezza L", "\\frac{2(13\\sqrt{13}-8)}{27}")],
   },
   {
-    // y = log x, 1≤x≤√3   →   complex expression, student self-checks
+    // y=log x, 1≤x≤√3 → espressione complessa, self-check
     exercise_number: "01_esercizi_curve_4",
-    answers: [
-      { label: "Lunghezza L", type: "self_check" },
-    ],
+    answers: [selfCheck("Lunghezza L")],
   },
   {
-    // parametric in 3D: (cos t, -sin t, log(3 sin t)), π/3≤t≤π/2   →   L = (1/2)log3
+    // (cos t,−sin t,log(3 sin t)), π/3≤t≤π/2 → L=(log3)/2
     exercise_number: "01_esercizi_curve_5",
-    answers: [
-      { label: "Lunghezza L", type: "exact", value: "\\frac{\\log 3}{2}" },
-    ],
+    answers: [exact("Lunghezza L", "\\frac{\\log3}{2}")],
   },
   {
-    // y = e^x, 0≤x≤1   →   complex expression, student self-checks
+    // y=e^x, 0≤x≤1 → espressione complessa, self-check
     exercise_number: "01_esercizi_curve_6",
-    answers: [
-      { label: "Lunghezza L", type: "self_check" },
-    ],
+    answers: [selfCheck("Lunghezza L")],
   },
   {
-    // ρ = e^{-θ}, 0≤θ≤2π   →   L = √2(1 - e^{-2π})
+    // ρ=e^{−θ}, 0≤θ≤2π → L=√2(1−e^{−2π})
     exercise_number: "01_esercizi_curve_7",
-    answers: [
-      { label: "Lunghezza L", type: "exact", value: "\\sqrt{2}(1-e^{-2\\pi})" },
-    ],
+    answers: [exact("Lunghezza L", "\\sqrt{2}(1-e^{-2\\pi})")],
   },
   {
-    // Retta tangente a (2sin t, -3cos t, 4t) in t=0
-    // P=(0,-3,0), vettore tangente=(2,0,4)
+    // Retta tangente a (2sin t,−3cos t,4t) in t=0 → P=(0,−3,0), tang=(2,0,4)
     exercise_number: "01_esercizi_curve_8",
     answers: [
-      { label: "Punto P (x,y,z)", type: "exact", value: "(0,-3,0)" },
-      { label: "Vettore tangente (a,b,c)", type: "exact", value: "(2,0,4)" },
+      exact("Punto P (x,y,z)", "(0,-3,0)"),
+      exact("Vettore tangente (a,b,c)", "(2,0,4)"),
     ],
   },
   {
-    // Stessa curva dell'es.1, -π≤t≤π   →   L = π²
+    // Stessa curva es.1, −π≤t≤π → L=π²
     exercise_number: "01_esercizi_curve_9",
-    answers: [
-      { label: "Lunghezza L", type: "exact", value: "\\pi^2" },
-    ],
+    answers: [exact("Lunghezza L", "\\pi^2")],
   },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FILE 2 — 02 esercizi funzioni 2var.md
 // ─────────────────────────────────────────────────────────────────────────────
-// exercise_number pattern: "02_esercizi_funzioni_2var_N"
 
 const funzioniAnswers: ExerciseSeed[] = [
   {
-    // Ex 1: dominio di 5 funzioni → classificazione open/closed/bounded/connected
-    // Solutions given for sub-parts 1)-5):
-    //  1) aperto, illimitato, non connesso
-    //  2) né aperto né chiuso, limitato, non connesso
-    //  3) né aperto né chiuso, limitato, connesso
-    //  4) né aperto né chiuso, illimitato, non connesso
-    //  5) chiuso, limitato, connesso
+    // 1): 5 funzioni → classificazione dominio
+    // 1)aperto,illimitato,non connesso  2)né,limitato,non connesso
+    // 3)né,limitato,connesso  4)né,illimitato,non connesso  5)chiuso,limitato,connesso
     exercise_number: "02_esercizi_funzioni_2var_1",
     answers: [
-      { label: "1) D è aperto/chiuso/né?", type: "exact", value: "aperto" },
-      { label: "1) D è limitato?", type: "exact", value: "no" },
-      { label: "1) D è connesso?", type: "exact", value: "no" },
-      { label: "2) D è aperto/chiuso/né?", type: "exact", value: "né aperto né chiuso" },
-      { label: "2) D è limitato?", type: "exact", value: "si" },
-      { label: "2) D è connesso?", type: "exact", value: "no" },
-      { label: "3) D è aperto/chiuso/né?", type: "exact", value: "né aperto né chiuso" },
-      { label: "3) D è limitato?", type: "exact", value: "si" },
-      { label: "3) D è connesso?", type: "exact", value: "si" },
-      { label: "4) D è aperto/chiuso/né?", type: "exact", value: "né aperto né chiuso" },
-      { label: "4) D è limitato?", type: "exact", value: "no" },
-      { label: "4) D è connesso?", type: "exact", value: "no" },
-      { label: "5) D è aperto/chiuso/né?", type: "exact", value: "chiuso" },
-      { label: "5) D è limitato?", type: "exact", value: "si" },
-      { label: "5) D è connesso?", type: "exact", value: "si" },
+      choose("1) D è…?", "aperto", OAC),
+      yn("1) D è limitato?", "no"),
+      yn("1) D è connesso?", "no"),
+      choose("2) D è…?", "né aperto né chiuso", OAC),
+      yn("2) D è limitato?", "si"),
+      yn("2) D è connesso?", "no"),
+      choose("3) D è…?", "né aperto né chiuso", OAC),
+      yn("3) D è limitato?", "si"),
+      yn("3) D è connesso?", "si"),
+      choose("4) D è…?", "né aperto né chiuso", OAC),
+      yn("4) D è limitato?", "no"),
+      yn("4) D è connesso?", "no"),
+      choose("5) D è…?", "chiuso", OAC),
+      yn("5) D è limitato?", "si"),
+      yn("5) D è connesso?", "si"),
     ],
   },
   {
-    // Ex 2: dominio di 4 funzioni + segno
-    //  1) chiuso, limitato, connesso (from solution "3) D è chiuso...")
-    //  Wait — solution numbering for ex 2 starts from sub-part 3:
-    //  2. 3) → chiuso, limitato, connesso
-    //     2) → aperto, illimitato, non connesso
-    //     3) → aperto, illimitato, non connesso
-    //     4) → né, illimitato, non connesso
-    // Note: solution numbering is confusing (2.3), 2.2), etc.) — use self_check for safety
+    // 2): 4 funzioni + segno → soluzioni numerate in modo confuso, self-check
     exercise_number: "02_esercizi_funzioni_2var_2",
-    answers: [
-      { label: "1) D è aperto/chiuso/né?", type: "self_check" },
-    ],
+    answers: [selfCheck("Dominio, proprietà e segno (confronta con la soluzione)")],
   },
   {
-    // Ex 3: dominio di 2 funzioni + frontiera → complex descriptions
+    // 3): dominio + frontiera di 2 funzioni → descrizione testuale
     exercise_number: "02_esercizi_funzioni_2var_3",
-    answers: [
-      { label: "Dominio e frontiera", type: "self_check" },
-    ],
+    answers: [selfCheck("Dominio e frontiera (confronta con la soluzione)")],
   },
   {
-    // Ex 4: linee di livello di 4 funzioni → descriptive
+    // 4): linee di livello di 4 funzioni → descrizione geometrica
     exercise_number: "02_esercizi_funzioni_2var_4",
-    answers: [
-      { label: "Linee di livello", type: "self_check" },
-    ],
+    answers: [selfCheck("Linee di livello (confronta con la soluzione)")],
   },
   {
-    // Ex 5: f=√(9-2x²-6y²)
-    // Dominio: ellisse 2x²+6y²≤9
-    // Linee di livello 0,1,3 e curva per P=(1,1): livello c=f(1,1)=1 → 2x²+6y²=8
+    // 5): f=√(9−2x²−6y²) → f(1,1)=1, curva di livello 2x²+6y²=8
     exercise_number: "02_esercizi_funzioni_2var_5",
     answers: [
-      { label: "Valore f(1,1) (livello della curva per P)", type: "exact", value: "1" },
-      { label: "Equazione curva di livello per P=(1,1)", type: "exact", value: "2x^2+6y^2=8" },
+      exact("Valore f(1,1)", "1"),
+      exact("Equazione curva di livello per P=(1,1)", "2x^2+6y^2=8"),
     ],
   },
   {
-    // Ex 6: dominio f(x,y,z)=log(x²+y²)+z → (x,y)≠(0,0), aperto, illimitato, connesso
+    // 6): f(x,y,z)=log(x²+y²)+z → D aperto, illimitato, connesso
     exercise_number: "02_esercizi_funzioni_2var_6",
     answers: [
-      { label: "D è aperto/chiuso/né?", type: "exact", value: "aperto" },
-      { label: "D è limitato?", type: "exact", value: "no" },
-      { label: "D è connesso?", type: "exact", value: "si" },
+      choose("D è…?", "aperto", OAC),
+      yn("D è limitato?", "no"),
+      yn("D è connesso?", "si"),
     ],
   },
   {
-    // Ex 7: superfici di livello di 3 funzioni → piani, ellissoidi, sfere
+    // 7): superfici di livello di 3 funzioni → descrizione geometrica
     exercise_number: "02_esercizi_funzioni_2var_7",
-    answers: [
-      { label: "Superfici di livello", type: "self_check" },
-    ],
+    answers: [selfCheck("Superfici di livello (confronta con la soluzione)")],
   },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FILE 3 — 03 esercizi limiti 2var.md
 // ─────────────────────────────────────────────────────────────────────────────
-// exercise_number pattern: "03_esercizi_limiti_2var_N"
 
 const limitiAnswers: ExerciseSeed[] = [
   {
-    // Ex 1: 8 limits
-    // 1)0  2)0  3)0  4)0  5)-∞  6)1  7)0  8)0
+    // 1): 8 limiti → 1)0 2)0 3)0 4)0 5)−∞ 6)1 7)0 8)0
     exercise_number: "03_esercizi_limiti_2var_1",
     answers: [
-      { label: "1)", type: "exact", value: "0" },
-      { label: "2)", type: "exact", value: "0" },
-      { label: "3)", type: "exact", value: "0" },
-      { label: "4)", type: "exact", value: "0" },
-      { label: "5)", type: "exact", value: "-\\infty" },
-      { label: "6)", type: "exact", value: "1" },
-      { label: "7)", type: "exact", value: "0" },
-      { label: "8)", type: "exact", value: "0" },
+      exact("1)", "0"),
+      exact("2)", "0"),
+      exact("3)", "0"),
+      exact("4)", "0"),
+      exact("5)", "-\\infty"),
+      exact("6)", "1"),
+      exact("7)", "0"),
+      exact("8)", "0"),
     ],
   },
   {
-    // Ex 2: dimostrare che 4 limiti non esistono → proof exercise, self_check
+    // 2): dimostrazione che 4 limiti non esistono → proof, self-check
     exercise_number: "03_esercizi_limiti_2var_2",
-    answers: [
-      { label: "Dimostrazione (verifica il tuo ragionamento)", type: "self_check" },
-    ],
+    answers: [selfCheck("Dimostrazione (confronta il tuo ragionamento con la soluzione)")],
   },
   {
-    // Ex 3: limite lungo rette vs parabola → proof, self_check
+    // 3): limite di x²y/(x⁴+y²) lungo rette=0, lungo parabola=1/2 → non esiste
     exercise_number: "03_esercizi_limiti_2var_3",
     answers: [
-      { label: "Limite lungo le rette", type: "exact", value: "0" },
-      { label: "Il limite (x,y)→(0,0) esiste?", type: "exact", value: "no" },
+      exact("Limite lungo le rette per l'origine", "0"),
+      yn("Il limite (x,y)→(0,0) esiste?", "no"),
     ],
   },
   {
-    // Ex 4: continuità di f piecewise con f(0,0)=0
-    // Continua ovunque incluso (0,0): sì
+    // 4): f piecewise con f(0,0)=0 → continua ovunque incluso (0,0)
     exercise_number: "03_esercizi_limiti_2var_4",
     answers: [
-      { label: "f è continua in (0,0)?", type: "exact", value: "si" },
-      { label: "f è continua in tutto ℝ²?", type: "exact", value: "si" },
+      yn("f è continua in (0,0)?", "si"),
+      yn("f è continua in tutto ℝ²?", "si"),
     ],
   },
   {
-    // Ex 5: continuità di f piecewise
-    // Il limite in (0,0) non esiste → f non è continua in (0,0)
+    // 5): f piecewise → limite in (0,0) non esiste → non continua in (0,0)
     exercise_number: "03_esercizi_limiti_2var_5",
     answers: [
-      { label: "Il limite in (0,0) esiste?", type: "exact", value: "no" },
-      { label: "f è continua in (0,0)?", type: "exact", value: "no" },
+      yn("Il limite in (0,0) esiste?", "no"),
+      yn("f è continua in (0,0)?", "no"),
     ],
   },
   {
-    // Ex 6: f(x,y)=sin(x²+y²)/(x²+y²), g(x,y)=(x²-y²)/(x²+y²)
-    // f estendibile con continuità? sì (con f(0,0)=1)
-    // g estendibile? no
+    // 6): f=sin(x²+y²)/(x²+y²) estendibile sì (f(0,0)=1); g=(x²-y²)/(x²+y²) no
     exercise_number: "03_esercizi_limiti_2var_6",
     answers: [
-      { label: "f può essere estesa con continuità?", type: "exact", value: "si" },
-      { label: "Valore di f(0,0) nell'estensione", type: "exact", value: "1" },
-      { label: "g può essere estesa con continuità?", type: "exact", value: "no" },
+      yn("f può essere estesa con continuità?", "si"),
+      exact("Valore di f(0,0) nell'estensione", "1"),
+      yn("g può essere estesa con continuità?", "no"),
     ],
   },
   {
-    // Ex 7: f=(x³+y²)/(xy)
-    // b) limite in (0,0): non esiste
-    // c) f estendibile con continuità a ℝ²\{(0,0)}: no (non sull'asse x)
+    // 7): f=(x³+y²)/(xy) → limite non esiste; non estendibile a ℝ²\{(0,0)}
     exercise_number: "03_esercizi_limiti_2var_7",
     answers: [
-      { label: "Il limite in (0,0) esiste?", type: "exact", value: "no" },
-      { label: "f è estendibile con continuità a ℝ²\\{(0,0)}?", type: "exact", value: "no" },
+      yn("Il limite in (0,0) esiste?", "no"),
+      yn("f è estendibile con continuità a ℝ²\\{(0,0)}?", "no"),
     ],
   },
   {
-    // Ex 8: f=e^{x²/y}
-    // b) limite in (0,0): non esiste
-    // c) estendibile a ℝ²\{(0,0)}: no (non sull'asse x)
+    // 8): f=e^{x²/y} → limite non esiste; non estendibile
     exercise_number: "03_esercizi_limiti_2var_8",
     answers: [
-      { label: "Il limite in (0,0) esiste?", type: "exact", value: "no" },
-      { label: "f è estendibile con continuità a ℝ²\\{(0,0)}?", type: "exact", value: "no" },
+      yn("Il limite in (0,0) esiste?", "no"),
+      yn("f è estendibile con continuità a ℝ²\\{(0,0)}?", "no"),
     ],
   },
   {
-    // Ex 9: f=sin(xy)/y
-    // b) estendibile con continuità a tutto ℝ²: sì (ponendo f(x,0)=x)
+    // 9): f=sin(xy)/y → estendibile a tutto ℝ² (f(x,0)=x)
     exercise_number: "03_esercizi_limiti_2var_9",
-    answers: [
-      { label: "f può essere estesa con continuità a tutto ℝ²?", type: "exact", value: "si" },
-    ],
+    answers: [yn("f può essere estesa con continuità a tutto ℝ²?", "si")],
   },
 ];
 

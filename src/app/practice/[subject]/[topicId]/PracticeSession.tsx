@@ -52,6 +52,7 @@ interface Exercise {
   conceptTags?: string[];
   answerCount?: number;
   answerLabels?: string[];
+  answerOptions?: (string[] | null)[];  // null = text input, string[] = clickable choices
   hasStoredSteps?: boolean;
 }
 
@@ -795,60 +796,94 @@ export function PracticeSession({
               <Separator />
 
               {/* ── Answer inputs ── */}
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-foreground">
-                  {studentAnswers.length > 1 ? "Le tue risposte" : "Risultato finale"}
-                </p>
+              {(() => {
+                const labels = getAnswerLabels(exercise);
+                const opts = exercise.answerOptions ?? [];
+                const hasAnyTextInput = opts.some(o => !o) || opts.length === 0;
+                return (
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium text-foreground">
+                      {studentAnswers.length > 1 ? "Le tue risposte" : "Risultato finale"}
+                    </p>
 
-                {/* One input per answer slot */}
-                <div className="space-y-3">
-                  {studentAnswers.map((val, i) => {
-                    const labels = getAnswerLabels(exercise);
-                    return (
-                      <div key={i} className="space-y-1.5">
-                        {studentAnswers.length > 1 && (
-                          <p className="text-xs font-semibold text-muted-foreground px-1">
-                            {labels[i]}
-                          </p>
-                        )}
-                        <input
-                          type="text"
-                          value={val}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setStudentAnswers(prev => {
-                              const next = [...prev];
-                              next[i] = v;
-                              return next;
-                            });
-                          }}
-                          onFocus={(e) => {
-                            mathKbRef.current = e.currentTarget;
-                            setActiveAnswerIdx(i);
-                          }}
-                          onKeyDown={(e) => { if (e.key === "Enter" && i === studentAnswers.length - 1) submitAnswer(); }}
-                          placeholder={studentAnswers.length === 1 ? "Es: 3/4, pi/2, sqrt(2)…" : `Inserisci ${labels[i]}`}
-                          disabled={phase === "correcting"}
-                          className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 font-mono"
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
+                    <div className="space-y-4">
+                      {studentAnswers.map((val, i) => {
+                        const choices = opts[i] ?? null;
+                        return (
+                          <div key={i} className="space-y-2">
+                            {(studentAnswers.length > 1 || choices) && (
+                              <p className="text-xs font-semibold text-muted-foreground px-1">
+                                {labels[i]}
+                              </p>
+                            )}
+                            {choices ? (
+                              /* Choice buttons */
+                              <div className={`flex gap-2 flex-wrap`}>
+                                {choices.map((opt) => (
+                                  <button
+                                    key={opt}
+                                    type="button"
+                                    disabled={phase === "correcting"}
+                                    onClick={() => setStudentAnswers(prev => {
+                                      const next = [...prev];
+                                      next[i] = opt;
+                                      return next;
+                                    })}
+                                    className={`px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                                      val === opt
+                                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                        : "bg-background border-input text-foreground hover:border-primary/60 hover:bg-primary/5"
+                                    } disabled:opacity-60`}
+                                  >
+                                    {opt}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              /* Text input */
+                              <input
+                                type="text"
+                                value={val}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setStudentAnswers(prev => {
+                                    const next = [...prev];
+                                    next[i] = v;
+                                    return next;
+                                  });
+                                }}
+                                onFocus={(e) => {
+                                  mathKbRef.current = e.currentTarget;
+                                  setActiveAnswerIdx(i);
+                                }}
+                                onKeyDown={(e) => { if (e.key === "Enter" && i === studentAnswers.length - 1) submitAnswer(); }}
+                                placeholder={studentAnswers.length === 1 ? "Es: 3/4, pi/2, sqrt(2)…" : `Inserisci ${labels[i]}`}
+                                disabled={phase === "correcting"}
+                                className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 font-mono"
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
 
-                {/* Math keyboard */}
-                <MathKeyboard
-                  inputRef={mathKbRef}
-                  value={studentAnswers[activeAnswerIdx] ?? ""}
-                  onChange={(v) => {
-                    setStudentAnswers(prev => {
-                      const next = [...prev];
-                      next[activeAnswerIdx] = v;
-                      return next;
-                    });
-                  }}
-                />
-              </div>
+                    {/* Math keyboard — only when at least one text input exists */}
+                    {hasAnyTextInput && (
+                      <MathKeyboard
+                        inputRef={mathKbRef}
+                        value={studentAnswers[activeAnswerIdx] ?? ""}
+                        onChange={(v) => {
+                          setStudentAnswers(prev => {
+                            const next = [...prev];
+                            next[activeAnswerIdx] = v;
+                            return next;
+                          });
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })()}
 
               {error && <p className="text-sm text-destructive text-center">{error}</p>}
 
