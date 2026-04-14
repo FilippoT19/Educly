@@ -83,18 +83,18 @@ export async function POST(request: NextRequest) {
         .single();
 
       const answers = ex?.answers as ExerciseAnswer[] | null;
-      const steps = ex?.solution_steps as SolutionStep[] | null;
+      const steps = (ex?.solution_steps as SolutionStep[] | null) ?? [];
 
-      if (answers && answers.length > 0 && steps && steps.length > 0) {
+      // If we have exact answers, compare directly — no Claude needed regardless of whether steps exist
+      if (answers && answers.length > 0) {
         const allExact = answers.every((a) => a.type === "exact");
 
         if (allExact) {
           if (answers.length === 1) {
-            // Single answer: compare directly
             const expected = answers[0].value ?? "";
             const isCorrect =
               normalizeAnswer(studentAnswer) === normalizeAnswer(expected);
-            const correctAnswerStr = answers.map((a) => a.value ?? "").join(", ");
+            const correctAnswerStr = answers[0].value ?? "";
 
             const result: AnswerCheckResult = {
               isCorrect,
@@ -109,8 +109,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(result);
           }
 
-          // Multiple exact answers (a, b, c parts):
-          // Try to split student answer and compare each part
+          // Multiple exact answers — try to split student answer and compare each part
           const parts = studentAnswer
             .split(/[;,]/)
             .map((p: string) => p.trim())
@@ -138,7 +137,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(result);
           }
 
-          // Parts count mismatch or student wrote everything as one → fall through to Claude
+          // Parts count mismatch — fall through to Claude only as last resort
         }
       }
     }

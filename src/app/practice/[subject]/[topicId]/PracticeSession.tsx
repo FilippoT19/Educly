@@ -59,73 +59,10 @@ type Phase =
   | "loading_exercise"
   | "solving"
   | "correcting"
-  | "solution"
-  | "step_review"
-  | "done";
+  | "solution";
 
 const DIFFICULTY_LABELS = ["Esempio", "Facile", "Medio", "Difficile"];
 const DIFFICULTY_COLORS = ["text-blue-500", "text-green-500", "text-yellow-500", "text-red-500"];
-
-// ── Step card (step-by-step review) ─────────────────────────────────────────
-
-function StepCard({
-  step, verdict, isCurrent, onYes, onNo,
-}: {
-  step: SolutionStep;
-  verdict: boolean | null;
-  isCurrent: boolean;
-  onYes?: () => void;
-  onNo?: () => void;
-}) {
-  return (
-    <div className={`rounded-2xl border transition-all ${
-      verdict === true
-        ? "border-green-500/30 bg-green-500/5"
-        : verdict === false
-        ? "border-red-500/30 bg-red-500/5"
-        : isCurrent
-        ? "border-primary/40 bg-primary/5"
-        : "border-border/50 bg-card"
-    }`}>
-      <div className="flex items-start gap-3 px-4 pt-4 pb-3">
-        <div className={`shrink-0 mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${
-          verdict === true ? "bg-green-500/20 text-green-400"
-          : verdict === false ? "bg-red-500/20 text-red-400"
-          : isCurrent ? "bg-primary/20 text-primary"
-          : "bg-muted text-muted-foreground"
-        }`}>
-          {verdict === true ? <CheckCircle className="h-3.5 w-3.5" />
-          : verdict === false ? <XCircle className="h-3.5 w-3.5" />
-          : step.step}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm leading-snug">{step.title}</p>
-          <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{step.text}</p>
-        </div>
-      </div>
-      {step.formula && (
-        <div className="px-4 pb-3">
-          <MathText text={`$$${step.formula}$$`} className="text-center" />
-        </div>
-      )}
-      {isCurrent && verdict === null && (
-        <div className="mx-4 mb-4 border-t border-border/40 pt-3">
-          <p className="text-xs text-center text-muted-foreground mb-3">
-            Hai eseguito questo passaggio correttamente?
-          </p>
-          <div className="flex gap-2">
-            <Button size="sm" className="flex-1 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20" variant="ghost" onClick={onYes}>
-              Sì, l&apos;ho fatto
-            </Button>
-            <Button size="sm" className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20" variant="ghost" onClick={onNo}>
-              No, non l&apos;ho fatto
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Solution accordion ────────────────────────────────────────────────────────
 
@@ -253,8 +190,6 @@ export function PracticeSession({
   const [currentExerciseId, setCurrentExerciseId] = useState<string | null>(null);
   const [checkResult, setCheckResult] = useState<AnswerCheckResult | null>(null);
 
-  const [stepIndex, setStepIndex]   = useState(0);
-  const [stepAnswers, setStepAnswers] = useState<boolean[]>([]);
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationItem[]>([]);
 
@@ -291,8 +226,6 @@ export function PracticeSession({
     setHintsUsed(false);
     setError("");
     setCheckResult(null);
-    setStepIndex(0);
-    setStepAnswers([]);
     setFinalScore(null);
     setRecommendations([]);
     savedRef.current = false;
@@ -350,19 +283,12 @@ export function PracticeSession({
     const result: AnswerCheckResult = await res.json();
     setCheckResult(result);
 
-    if (result.isCorrect) {
-      const score = hintsUsed ? 70 : 100;
-      setFinalScore(score);
-      setPhase("solution");
-      trackCorrectionResult({ subject, topicId: topic.id, isCorrect: true, score, usedDb: false });
-      saveResult(result, score);
-      fetchRecommendations(score);
-    } else {
-      trackCorrectionResult({ subject, topicId: topic.id, isCorrect: false, score: 0, usedDb: false });
-      setStepIndex(0);
-      setStepAnswers([]);
-      setPhase("step_review");
-    }
+    const score = result.isCorrect ? (hintsUsed ? 70 : 100) : 0;
+    setFinalScore(score);
+    setPhase("solution");
+    trackCorrectionResult({ subject, topicId: topic.id, isCorrect: result.isCorrect, score, usedDb: false });
+    saveResult(result, score);
+    fetchRecommendations(score);
   }
 
   function saveResult(result: AnswerCheckResult, score: number) {
@@ -398,29 +324,7 @@ export function PracticeSession({
       .catch(() => {});
   }
 
-  function answerStep(correct: boolean) {
-    if (!checkResult) return;
-    const steps = checkResult.solutionSteps;
-    const newAnswers = [...stepAnswers, correct];
-    setStepAnswers(newAnswers);
-
-    if (stepIndex < steps.length - 1) {
-      setStepIndex(stepIndex + 1);
-    } else {
-      const earnedWeight = steps.reduce((sum, s, i) => sum + (newAnswers[i] ? s.weight : 0), 0);
-      const score = Math.min(earnedWeight, 75);
-      setFinalScore(score);
-      setPhase("done");
-      saveResult(checkResult, score);
-      fetchRecommendations(score);
-    }
-  }
-
   const steps: SolutionStep[] = checkResult?.solutionSteps ?? [];
-
-  const partialScore = steps.slice(0, stepAnswers.length).reduce(
-    (sum, s, i) => sum + (stepAnswers[i] ? s.weight : 0), 0
-  );
 
   // ── Shared UI blocks ──────────────────────────────────────────────────────
 
@@ -693,7 +597,9 @@ export function PracticeSession({
     );
   }
 
-  // ── SOLUTION / STEP_REVIEW / DONE — two-column layout ────────────────────
+  // ── SOLUTION — two-column layout ─────────────────────────────────────────
+
+  const isCorrect = checkResult?.isCorrect ?? false;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -710,9 +616,51 @@ export function PracticeSession({
 
           {/* LEFT */}
           <div className="space-y-4 min-w-0">
-            <ExerciseRecap />
+            {/* Exercise text */}
+            <div className="rounded-xl border border-border bg-card px-4 py-3">
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Esercizio</p>
+                {exercise && (
+                  <Badge variant="outline" className={`text-[11px] ${DIFFICULTY_COLORS[exercise.difficulty]}`}>
+                    {DIFFICULTY_LABELS[exercise.difficulty]}
+                  </Badge>
+                )}
+              </div>
+              {exercise && <MathText text={exercise.text} className="text-sm leading-relaxed" />}
+            </div>
 
-            {phase === "solution" && checkResult && (
+            {/* Answer comparison */}
+            {checkResult && (
+              <div className={`rounded-xl border px-4 py-3 ${
+                isCorrect ? "border-green-500/30 bg-green-500/5" : "border-red-400/30 bg-red-500/5"
+              }`}>
+                <div className="flex items-center gap-2 mb-3">
+                  {isCorrect
+                    ? <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+                    : <XCircle className="h-4 w-4 text-red-400 shrink-0" />}
+                  <p className="text-sm font-semibold">
+                    {isCorrect ? "Risposta corretta" : "Risposta sbagliata"}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                      La tua risposta
+                    </p>
+                    <p className="font-mono text-sm break-all">{combinedAnswer || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                      Risposta corretta
+                    </p>
+                    <MathText text={checkResult.correctAnswer} className="text-sm font-medium" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Solution steps (read-only accordion) */}
+            {steps.length > 0 && (
               <div className="space-y-3">
                 <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
                   Soluzione
@@ -720,93 +668,16 @@ export function PracticeSession({
                 {steps.map(s => <SolutionAccordion key={s.step} step={s} missed={false} />)}
               </div>
             )}
-
-            {phase === "step_review" && checkResult && (
-              <div className="space-y-3">
-                <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                  Revisione passaggi — {stepIndex + 1} di {steps.length}
-                </p>
-                {steps.slice(0, stepIndex + 1).map((s, i) => (
-                  <StepCard
-                    key={s.step}
-                    step={s}
-                    verdict={i < stepAnswers.length ? stepAnswers[i] : null}
-                    isCurrent={i === stepIndex}
-                    onYes={() => answerStep(true)}
-                    onNo={() => answerStep(false)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {phase === "done" && checkResult && (
-              <div className="space-y-3">
-                <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                  Soluzione
-                </p>
-                {steps.map((s, i) => (
-                  <SolutionAccordion key={s.step} step={s} missed={stepAnswers[i] === false} />
-                ))}
-              </div>
-            )}
           </div>
 
           {/* RIGHT — sticky sidebar */}
           <div className="md:sticky md:top-6 space-y-3">
-
-            {phase === "solution" && (
-              <>
-                <ScoreCard
-                  score={finalScore ?? 100}
-                  label={hintsUsed ? "punti (suggerimenti usati)" : "punti su 100"}
-                  color="green"
-                />
-                <RecommendationSection />
-              </>
-            )}
-
-            {phase === "step_review" && checkResult && (
-              <>
-                <Card className="border-red-300 bg-red-50 dark:bg-red-950 dark:border-red-800">
-                  <CardContent className="pt-4 pb-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <XCircle className="h-4 w-4 text-red-500 shrink-0" />
-                      <p className="text-sm font-semibold">Risposta sbagliata</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-1">Risposta corretta:</p>
-                    <MathText text={checkResult.correctAnswer} className="text-sm font-medium" />
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4 pb-4 space-y-2">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Progresso</span>
-                      <span>{stepIndex + 1} / {steps.length}</span>
-                    </div>
-                    <div className="flex gap-1">
-                      {steps.map((_, i) => (
-                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${
-                          i < stepAnswers.length
-                            ? stepAnswers[i] ? "bg-green-500" : "bg-red-400"
-                            : i === stepIndex ? "bg-primary" : "bg-muted"
-                        }`} />
-                      ))}
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Punteggio parziale</span>
-                      <span className="font-semibold">{partialScore} / 75</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-
-            {phase === "done" && (
-              <>
-                <ScoreCard score={finalScore ?? 0} label="punti su 100" color="orange" />
-                <RecommendationSection />
-              </>
-            )}
+            <ScoreCard
+              score={finalScore ?? 0}
+              label={isCorrect && hintsUsed ? "punti (suggerimenti usati)" : "punti su 100"}
+              color={isCorrect ? "green" : "orange"}
+            />
+            <RecommendationSection />
           </div>
         </div>
       </div>
