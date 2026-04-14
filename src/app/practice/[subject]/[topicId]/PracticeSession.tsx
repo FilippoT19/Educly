@@ -74,10 +74,12 @@ function AnswerComparisonCard({
   comparisons,
   overallCorrect,
   onReport,
+  onAskAI,
 }: {
   comparisons: AnswerComparison[];
   overallCorrect: boolean;
   onReport: () => void;
+  onAskAI?: (msg: string) => void;
 }) {
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -105,29 +107,38 @@ function AnswerComparisonCard({
       {/* One row per answer part */}
       <div className="divide-y divide-border/50">
         {comparisons.map((c, i) => (
-          <div key={i} className="px-4 py-3">
-            {/* Label (always shown for multi-part, hidden for single) */}
+          <div key={i} className="px-4 py-3 space-y-2">
             {comparisons.length > 1 && (
-              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide mb-2">{c.label}</p>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">{c.label}</p>
             )}
             <div className="flex items-start gap-3">
-              {/* Student answer */}
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] text-muted-foreground mb-0.5">La tua risposta</p>
                 <p className="font-mono text-sm break-all">{c.studentAnswer || "—"}</p>
               </div>
-              {/* Correct answer */}
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] text-muted-foreground mb-0.5">Risposta corretta</p>
                 <MathText text={c.correctAnswer} className="text-sm font-medium" />
               </div>
-              {/* Verdict icon */}
               <div className="shrink-0 mt-4">
                 {c.isCorrect
                   ? <CheckCircle className="h-4 w-4 text-green-500" />
                   : <XCircle className="h-4 w-4 text-red-400" />}
               </div>
             </div>
+            {onAskAI && (
+              <button
+                onClick={() => onAskAI(
+                  comparisons.length > 1
+                    ? `Spiegami la risposta "${c.label}": la risposta corretta è ${c.correctAnswer}. La mia era "${c.studentAnswer}". Perché?`
+                    : `Spiegami la risposta corretta: ${c.correctAnswer}. La mia risposta era "${c.studentAnswer}". Perché è ${c.isCorrect ? "giusta" : "sbagliata"}?`
+                )}
+                className="flex items-center gap-1 text-[11px] text-primary hover:text-primary/80 transition-colors font-medium"
+              >
+                <BookOpen className="h-3 w-3" />
+                Ask AI
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -177,13 +188,14 @@ function ReportModal({
 // ── Step card ─────────────────────────────────────────────────────────────────
 
 function StepCard({
-  step, verdict, isCurrent, onYes, onNo,
+  step, verdict, isCurrent, onYes, onNo, onAskAI,
 }: {
   step: SolutionStep;
   verdict: boolean | null;
   isCurrent: boolean;
   onYes?: () => void;
   onNo?: () => void;
+  onAskAI?: (msg: string) => void;
 }) {
   return (
     <div className={`rounded-2xl border transition-all ${
@@ -204,8 +216,21 @@ function StepCard({
           : step.step}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm leading-snug">{step.title}</p>
-          <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{step.text}</p>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-semibold text-sm leading-snug">{step.title}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{step.text}</p>
+            </div>
+            {onAskAI && (
+              <button
+                onClick={() => onAskAI(`Spiegami il passaggio ${step.step}: "${step.title}". ${step.text}`)}
+                className="shrink-0 flex items-center gap-1 text-[11px] text-primary hover:text-primary/80 transition-colors font-medium"
+              >
+                <BookOpen className="h-3 w-3" />
+                Ask AI
+              </button>
+            )}
+          </div>
         </div>
       </div>
       {step.formula && (
@@ -234,16 +259,27 @@ function StepCard({
 
 // ── Solution accordion ────────────────────────────────────────────────────────
 
-function SolutionAccordion({ step, missed }: { step: SolutionStep; missed: boolean }) {
+function SolutionAccordion({ step, missed, onAskAI }: { step: SolutionStep; missed: boolean; onAskAI?: (msg: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className={`rounded-2xl border ${missed ? "border-red-500/30 bg-red-500/5" : "border-border/50 bg-card"}`}>
       <div className="px-4 pt-4 pb-2">
-        <div className="flex items-center gap-2 mb-0.5">
-          {missed
-            ? <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
-            : <CheckCircle className="h-3.5 w-3.5 text-green-400 shrink-0" />}
-          <p className="font-semibold text-sm">{step.title}</p>
+        <div className="flex items-start justify-between gap-2 mb-0.5">
+          <div className="flex items-center gap-2">
+            {missed
+              ? <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+              : <CheckCircle className="h-3.5 w-3.5 text-green-400 shrink-0" />}
+            <p className="font-semibold text-sm">{step.title}</p>
+          </div>
+          {onAskAI && (
+            <button
+              onClick={() => onAskAI(`Spiegami il passaggio ${step.step}: "${step.title}". ${step.text}`)}
+              className="shrink-0 flex items-center gap-1 text-[11px] text-primary hover:text-primary/80 transition-colors font-medium"
+            >
+              <BookOpen className="h-3 w-3" />
+              Ask AI
+            </button>
+          )}
         </div>
         <p className="text-xs text-muted-foreground leading-snug">{step.text}</p>
       </div>
@@ -370,6 +406,7 @@ export function PracticeSession({
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportSent, setReportSent] = useState(false);
   const [selfCheckPending, setSelfCheckPending] = useState(false);
+  const [askMessage, setAskMessage] = useState<string | null>(null);
 
   const savedRef = useRef(false);
 
@@ -738,9 +775,8 @@ export function PracticeSession({
             <ExerciseAIAgent
               exerciseText={exercise.text}
               subject={subject}
-              phase={phase}
               steps={[]}
-              hasStoredSteps={exercise.hasStoredSteps ?? false}
+              mode="floating"
             />
           )}
 
@@ -906,20 +942,44 @@ export function PracticeSession({
     );
   }
 
-  // ── SOLUTION / STEP_REVIEW / DONE — two-column layout ────────────────────
+  // ── SOLUTION / STEP_REVIEW / DONE — full-height layout with AI panel ────────
 
   const isCorrect = checkResult?.isCorrect ?? false;
 
+  const phaseLabel =
+    phase === "solution" ? (selfCheckPending ? "Soluzione" : "Correzione")
+    : phase === "step_review" ? "Revisione passaggi"
+    : phase === "done" ? "Soluzione"
+    : "";
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {header}
-      <ExerciseAIAgent
-        exerciseText={exercise?.text ?? ""}
-        subject={subject}
-        phase={phase}
-        steps={steps}
-        hasStoredSteps={exercise?.hasStoredSteps ?? false}
-      />
+    <div className="h-screen bg-background flex flex-col">
+      {/* Header with phase label */}
+      <header className="border-b border-border/50 px-4 py-3 flex items-center gap-3 shrink-0 bg-background/80 backdrop-blur-sm z-10">
+        <Link
+          href={backHref ?? `/course/${subject}`}
+          className="inline-flex items-center justify-center rounded-xl size-8 hover:bg-white/5 transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </Link>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{subjectName}</p>
+          <div className="flex items-center gap-2">
+            <h1 className="font-semibold text-[15px] leading-tight truncate">{topic.name}</h1>
+            {phaseLabel && (
+              <Badge variant="outline" className="text-[10px] shrink-0">{phaseLabel}</Badge>
+            )}
+          </div>
+        </div>
+        {stats && (
+          <div className="text-right text-sm shrink-0">
+            <p className="font-semibold">{stats.exercises_done}</p>
+            {successRate !== null && (
+              <p className="text-[11px] text-muted-foreground">{successRate}%</p>
+            )}
+          </div>
+        )}
+      </header>
 
       {/* Report modal */}
       {showReportModal && (
@@ -930,25 +990,17 @@ export function PracticeSession({
         />
       )}
 
-      <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-6">
-        <div className="grid md:grid-cols-[1fr_280px] gap-6 items-start">
+      {/* Two-column body: left scrolls, right = AI panel */}
+      <div className="flex-1 min-h-0 flex">
 
-          {/* LEFT */}
-          <div className="space-y-4 min-w-0">
-            {/* Exercise text */}
-            <div className="rounded-xl border border-border bg-card px-4 py-3">
-              <div className="flex items-center gap-2 mb-2">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Esercizio</p>
-                {exercise && (
-                  <Badge variant="outline" className={`text-[11px] ${DIFFICULTY_COLORS[exercise.difficulty]}`}>
-                    {DIFFICULTY_LABELS[exercise.difficulty]}
-                  </Badge>
-                )}
-              </div>
-              {exercise && <MathText text={exercise.text} className="text-sm leading-relaxed" />}
-            </div>
+        {/* LEFT — scrollable content */}
+        <div className="flex-1 overflow-y-auto px-4 py-5">
+          <div className="max-w-2xl mx-auto space-y-4">
 
-            {/* Self-check: show solution and ask student to self-report */}
+            {/* Exercise recap */}
+            <ExerciseRecap />
+
+            {/* Self-check: show full solution for student to compare */}
             {selfCheckPending && checkResult && (
               <div className="rounded-xl border border-border bg-card overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/40 border-b">
@@ -961,61 +1013,7 @@ export function PracticeSession({
               </div>
             )}
 
-            {/* Answer comparison rows */}
-            {checkResult && !selfCheckPending && (
-              <div className="space-y-1">
-                <AnswerComparisonCard
-                  comparisons={answerComparisons}
-                  overallCorrect={isCorrect}
-                  onReport={() => setShowReportModal(true)}
-                />
-                {reportSent && (
-                  <p className="text-xs text-muted-foreground px-1">
-                    Risultato annullato. Segnalazione inviata.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Step-by-step review (wrong answer with steps) */}
-            {phase === "step_review" && checkResult && (
-              <div className="space-y-3">
-                <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                  Revisione passaggi — {stepIndex + 1} di {steps.length}
-                </p>
-                {steps.slice(0, stepIndex + 1).map((s, i) => (
-                  <StepCard
-                    key={s.step}
-                    step={s}
-                    verdict={i < stepAnswers.length ? stepAnswers[i] : null}
-                    isCurrent={i === stepIndex}
-                    onYes={() => answerStep(true)}
-                    onNo={() => answerStep(false)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Solution (correct answer or after step review done) */}
-            {(phase === "solution" || phase === "done") && steps.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                  Soluzione
-                </p>
-                {steps.map((s, i) => (
-                  <SolutionAccordion
-                    key={s.step}
-                    step={s}
-                    missed={phase === "done" && stepAnswers[i] === false}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT — sticky sidebar */}
-          <div className="md:sticky md:top-6 space-y-3">
-
+            {/* Self-check yes/no */}
             {phase === "solution" && selfCheckPending && (
               <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3">
                 <p className="text-sm font-semibold text-center">Hai risposto correttamente?</p>
@@ -1060,50 +1058,116 @@ export function PracticeSession({
               </div>
             )}
 
-            {phase === "solution" && !selfCheckPending && (
-              <>
-                <ScoreCard
-                  score={finalScore ?? 0}
-                  label={isCorrect && hintsUsed ? "punti (suggerimenti usati)" : "punti su 100"}
-                  color={isCorrect ? "green" : "orange"}
+            {/* Answer comparison rows */}
+            {checkResult && !selfCheckPending && (
+              <div className="space-y-1">
+                <AnswerComparisonCard
+                  comparisons={answerComparisons}
+                  overallCorrect={isCorrect}
+                  onReport={() => setShowReportModal(true)}
+                  onAskAI={setAskMessage}
                 />
-                <RecommendationSection />
-              </>
+                {reportSent && (
+                  <p className="text-xs text-muted-foreground px-1">
+                    Risultato annullato. Segnalazione inviata.
+                  </p>
+                )}
+              </div>
             )}
 
+            {/* Score badge (inline, compact) */}
+            {(phase === "solution" && !selfCheckPending) && finalScore !== null && (
+              <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 border ${
+                isCorrect ? "border-green-500/30 bg-green-500/5" : "border-orange-500/30 bg-orange-500/5"
+              }`}>
+                <span className="text-xs text-muted-foreground">
+                  {isCorrect && hintsUsed ? "Punti (suggerimenti usati)" : "Punteggio"}
+                </span>
+                <span className={`text-xl font-bold ${isCorrect ? "text-green-400" : "text-orange-400"}`}>
+                  {finalScore} <span className="text-xs font-normal text-muted-foreground">/ 100</span>
+                </span>
+              </div>
+            )}
+
+            {/* Step-by-step review progress */}
             {phase === "step_review" && (
-              <>
-                <Card>
-                  <CardContent className="pt-4 pb-4 space-y-2">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Progresso</span>
-                      <span>{stepIndex + 1} / {steps.length}</span>
-                    </div>
-                    <div className="flex gap-1">
-                      {steps.map((_, i) => (
-                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${
-                          i < stepAnswers.length
-                            ? stepAnswers[i] ? "bg-green-500" : "bg-red-400"
-                            : i === stepIndex ? "bg-primary" : "bg-muted"
-                        }`} />
-                      ))}
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Punteggio parziale</span>
-                      <span className="font-semibold">{partialScore} / 75</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
+              <div className="rounded-xl border border-border bg-card px-4 py-3 space-y-2">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Progresso</span>
+                  <span>{stepIndex + 1} / {steps.length} — parziale: <span className="font-semibold text-foreground">{partialScore}</span> / 75</span>
+                </div>
+                <div className="flex gap-1">
+                  {steps.map((_, i) => (
+                    <div key={i} className={`h-1.5 flex-1 rounded-full transition-colors ${
+                      i < stepAnswers.length
+                        ? stepAnswers[i] ? "bg-green-500" : "bg-red-400"
+                        : i === stepIndex ? "bg-primary" : "bg-muted"
+                    }`} />
+                  ))}
+                </div>
+              </div>
             )}
 
-            {phase === "done" && (
-              <>
-                <ScoreCard score={finalScore ?? 0} label="punti su 100" color="orange" />
-                <RecommendationSection />
-              </>
+            {/* Step cards */}
+            {phase === "step_review" && checkResult && (
+              <div className="space-y-3">
+                {steps.slice(0, stepIndex + 1).map((s, i) => (
+                  <StepCard
+                    key={s.step}
+                    step={s}
+                    verdict={i < stepAnswers.length ? stepAnswers[i] : null}
+                    isCurrent={i === stepIndex}
+                    onYes={() => answerStep(true)}
+                    onNo={() => answerStep(false)}
+                    onAskAI={setAskMessage}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Solution accordion (correct or after step review) */}
+            {(phase === "solution" || phase === "done") && steps.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                  Soluzione passo-passo
+                </p>
+                {steps.map((s, i) => (
+                  <SolutionAccordion
+                    key={s.step}
+                    step={s}
+                    missed={phase === "done" && stepAnswers[i] === false}
+                    onAskAI={setAskMessage}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Score + recommendations after step review done */}
+            {phase === "done" && finalScore !== null && (
+              <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 border border-orange-500/30 bg-orange-500/5`}>
+                <span className="text-xs text-muted-foreground">Punteggio finale</span>
+                <span className="text-xl font-bold text-orange-400">
+                  {finalScore} <span className="text-xs font-normal text-muted-foreground">/ 100</span>
+                </span>
+              </div>
+            )}
+
+            {((phase === "solution" && !selfCheckPending) || phase === "done") && (
+              <RecommendationSection />
             )}
           </div>
+        </div>
+
+        {/* RIGHT — always-open AI panel */}
+        <div className="w-80 shrink-0 hidden md:flex flex-col">
+          <ExerciseAIAgent
+            exerciseText={exercise?.text ?? ""}
+            subject={subject}
+            steps={steps}
+            mode="panel"
+            askMessage={askMessage}
+            onAskConsumed={() => setAskMessage(null)}
+          />
         </div>
       </div>
     </div>
