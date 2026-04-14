@@ -35,7 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   } else {
     const { data } = await supabase
       .from("exercises")
-      .select("id, topic_id, difficulty, question_latex, chapter_title, created_at")
+      .select("id, topic_id, difficulty, question_latex, solution_latex, solution_steps, chapter_title, created_at")
       .eq("source_document_id", id)
       .order("created_at", { ascending: true });
 

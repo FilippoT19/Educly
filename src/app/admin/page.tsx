@@ -483,6 +483,7 @@ export default function AdminPage() {
   const [loadingContent, setLoadingContent] = useState(false);
   const [detailTab, setDetailTab] = useState<"upload" | "content">("upload");
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
+  const [previewExercise, setPreviewExercise] = useState<Record<string, unknown> | null>(null);
 
   // Chapter upload (detail view)
   const [chTitle, setChTitle] = useState("");
@@ -834,6 +835,66 @@ export default function AdminPage() {
   }
 
   // ── Main layout ────────────────────────────────────────────────────────────
+
+  // Exercise preview modal
+  const ExercisePreviewModal = previewExercise ? (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={() => setPreviewExercise(null)}
+    >
+      <div
+        className="bg-card rounded-2xl border shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">{(previewExercise.topic_id as string).replace(/_/g, " ")}</Badge>
+            <Badge variant="secondary" className="text-xs">{DIFFICULTY_LABELS[previewExercise.difficulty as number] ?? "—"}</Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href={`/practice/${detailBook?.subject}/${previewExercise.topic_id}?exerciseId=${previewExercise.id}&back=/admin`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />Apri come studente
+            </a>
+            <button onClick={() => setPreviewExercise(null)} className="p-1 rounded hover:bg-muted text-muted-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto px-5 py-4 space-y-4 flex-1">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Esercizio</p>
+            <MathText text={previewExercise.question_latex as string} className="text-sm leading-relaxed" />
+          </div>
+          {!!previewExercise.solution_latex && (
+            <div className="border-t pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Soluzione</p>
+              <MathText text={previewExercise.solution_latex as string} className="text-sm leading-relaxed" />
+            </div>
+          )}
+          {Array.isArray(previewExercise.solution_steps) && (previewExercise.solution_steps as unknown[]).length > 0 && (
+            <div className="border-t pt-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Procedimento</p>
+              {(previewExercise.solution_steps as Array<{ title: string; explanation: string }>).map((step, i) => (
+                <div key={i} className="bg-muted/40 rounded-xl px-4 py-3">
+                  <p className="text-xs font-semibold mb-1">Passo {i + 1} — {step.title}</p>
+                  <MathText text={step.explanation} className="text-sm" />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
     { id: "library", label: "Libreria", icon: <Library className="h-4 w-4" /> },
     { id: "exercises", label: "Esercizi", icon: <PenLine className="h-4 w-4" /> },
@@ -844,6 +905,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-muted/30">
+      {ExercisePreviewModal}
       {/* Top nav */}
       <div className="border-b bg-card sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 flex items-center gap-1 h-14">
@@ -1117,23 +1179,45 @@ export default function AdminPage() {
                                     </>
                                   ) : (
                                     <>
-                                      <p className="text-xs text-muted-foreground mb-1">
-                                        {item.topic_id as string} ·{" "}
+                                      <p className="text-xs text-muted-foreground mb-1.5">
+                                        {(item.topic_id as string).replace(/_/g, " ")} ·{" "}
                                         <span className={item.difficulty === 0 ? "text-blue-400" : item.difficulty === 1 ? "text-green-400" : item.difficulty === 2 ? "text-yellow-400" : "text-red-400"}>
                                           {DIFFICULTY_LABELS[item.difficulty as number] ?? "—"}
                                         </span>
                                       </p>
-                                      <p className="text-xs font-mono text-muted-foreground line-clamp-2">{item.question_latex as string}</p>
+                                      <MathText text={item.question_latex as string} className="text-sm line-clamp-3" />
                                     </>
                                   )}
                                 </div>
-                                <button
-                                  onClick={() => deleteItem(item.id as string, contentType === "lessons" ? "lesson" : "exercise")}
-                                  className="shrink-0 p-1.5 text-muted-foreground hover:text-destructive transition-colors rounded-lg hover:bg-destructive/10"
-                                  title="Elimina"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
+                                <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
+                                  {contentType === "exercises" && (
+                                    <>
+                                      <button
+                                        onClick={() => setPreviewExercise(item)}
+                                        className="p-1.5 text-muted-foreground hover:text-primary transition-colors rounded-lg hover:bg-primary/10"
+                                        title="Anteprima"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </button>
+                                      <a
+                                        href={`/practice/${detailBook?.subject}/${item.topic_id}?exerciseId=${item.id}&back=/admin`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1.5 text-muted-foreground hover:text-primary transition-colors rounded-lg hover:bg-primary/10"
+                                        title="Apri come studente"
+                                      >
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                      </a>
+                                    </>
+                                  )}
+                                  <button
+                                    onClick={() => deleteItem(item.id as string, contentType === "lessons" ? "lesson" : "exercise")}
+                                    className="p-1.5 text-muted-foreground hover:text-destructive transition-colors rounded-lg hover:bg-destructive/10"
+                                    title="Elimina"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
