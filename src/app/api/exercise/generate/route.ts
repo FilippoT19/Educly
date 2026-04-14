@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     if (!ex) return NextResponse.json({ error: "Esercizio non trovato" }, { status: 404 });
     const answers = ex.answers || [];
     const exactAnswers = Array.isArray(answers) ? answers.filter((a: { type: string }) => a.type === "exact") : [];
+    const hasSelfCheck = Array.isArray(answers) && answers.some((a: { type: string }) => a.type === "self_check");
     return NextResponse.json({
       id: ex.id,
       text: ex.question_latex,
@@ -42,8 +43,8 @@ export async function POST(request: NextRequest) {
       solutionExact: ex.solution_exact || null,
       solutionSteps: ex.solution_steps || [],
       conceptTags: ex.concept_tags || [],
-      answerCount: exactAnswers.length,
-      answerLabels: exactAnswers.map((a: { label: string }) => a.label || "Risultato"),
+      answerCount: hasSelfCheck ? 1 : exactAnswers.length,
+      answerLabels: hasSelfCheck ? ["Risposta"] : exactAnswers.map((a: { label: string }) => a.label || "Risultato"),
     });
   }
 
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest) {
 
     const pickedAnswers = picked.answers || [];
     const pickedExact = Array.isArray(pickedAnswers) ? pickedAnswers.filter((a: { type: string }) => a.type === "exact") : [];
+    const pickedSelfCheck = Array.isArray(pickedAnswers) && pickedAnswers.some((a: { type: string }) => a.type === "self_check");
     return NextResponse.json({
       id: picked.id,
       text: picked.question_latex,
@@ -118,8 +120,8 @@ export async function POST(request: NextRequest) {
       solutionExact: picked.solution_exact || null,
       solutionSteps: picked.solution_steps || [],
       conceptTags: picked.concept_tags || [],
-      answerCount: pickedExact.length,
-      answerLabels: pickedExact.map((a: { label: string }) => a.label || "Risultato"),
+      answerCount: pickedSelfCheck ? 1 : pickedExact.length,
+      answerLabels: pickedSelfCheck ? ["Risposta"] : pickedExact.map((a: { label: string }) => a.label || "Risultato"),
     });
   }
 

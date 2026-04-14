@@ -368,6 +368,7 @@ export function PracticeSession({
   const [recommendations, setRecommendations] = useState<RecommendationItem[]>([]);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportSent, setReportSent] = useState(false);
+  const [selfCheckPending, setSelfCheckPending] = useState(false);
 
   const savedRef = useRef(false);
 
@@ -396,6 +397,7 @@ export function PracticeSession({
   async function loadExercise(exerciseId?: string) {
     setPhase("loading_exercise");
     setExercise(null);
+    setSelfCheckPending(false);
     setStudentAnswers([""]);
     setActiveAnswerIdx(0);
     setShowHints(false);
@@ -462,6 +464,13 @@ export function PracticeSession({
 
     const result: AnswerCheckResult = await res.json();
     setCheckResult(result);
+
+    if (result.selfCheck) {
+      // Self-check: show solution, let student self-report
+      setPhase("solution");
+      setSelfCheckPending(true);
+      return;
+    }
 
     if (result.isCorrect) {
       const score = hintsUsed ? 70 : 100;
@@ -904,8 +913,21 @@ export function PracticeSession({
               {exercise && <MathText text={exercise.text} className="text-sm leading-relaxed" />}
             </div>
 
+            {/* Self-check: show solution and ask student to self-report */}
+            {selfCheckPending && checkResult && (
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-muted/40 border-b">
+                  <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Soluzione</p>
+                </div>
+                <div className="px-4 py-3">
+                  <MathText text={checkResult.correctAnswer} className="text-sm leading-relaxed" />
+                </div>
+              </div>
+            )}
+
             {/* Answer comparison rows */}
-            {checkResult && (
+            {checkResult && !selfCheckPending && (
               <div className="space-y-1">
                 <AnswerComparisonCard
                   comparisons={answerComparisons}
@@ -959,7 +981,51 @@ export function PracticeSession({
           {/* RIGHT — sticky sidebar */}
           <div className="md:sticky md:top-6 space-y-3">
 
-            {phase === "solution" && (
+            {phase === "solution" && selfCheckPending && (
+              <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <p className="text-sm font-semibold text-center">Hai risposto correttamente?</p>
+                <p className="text-xs text-muted-foreground text-center">Confronta la tua risposta con quella mostrata</p>
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20"
+                    variant="ghost"
+                    onClick={() => {
+                      const score = hintsUsed ? 70 : 100;
+                      setFinalScore(score);
+                      setSelfCheckPending(false);
+                      if (checkResult) {
+                        const result = { ...checkResult, isCorrect: true };
+                        setCheckResult(result);
+                        trackCorrectionResult({ subject, topicId: topic.id, isCorrect: true, score, usedDb: false });
+                        saveResult(result, score);
+                        fetchRecommendations(score);
+                      }
+                    }}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-1.5" /> Sì
+                  </Button>
+                  <Button
+                    className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20"
+                    variant="ghost"
+                    onClick={() => {
+                      setFinalScore(0);
+                      setSelfCheckPending(false);
+                      if (checkResult) {
+                        const result = { ...checkResult, isCorrect: false };
+                        setCheckResult(result);
+                        trackCorrectionResult({ subject, topicId: topic.id, isCorrect: false, score: 0, usedDb: false });
+                        saveResult(result, 0);
+                        fetchRecommendations(0);
+                      }
+                    }}
+                  >
+                    <XCircle className="h-4 w-4 mr-1.5" /> No
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {phase === "solution" && !selfCheckPending && (
               <>
                 <ScoreCard
                   score={finalScore ?? 0}

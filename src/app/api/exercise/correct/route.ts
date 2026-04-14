@@ -10,18 +10,29 @@ function normalizeAnswer(s: string): string {
   return s
     .trim()
     .toLowerCase()
+    // Accented Italian → plain
+    .replace(/\bsì\b/g, "si")
     // Remove all whitespace
     .replace(/\s+/g, "")
+    // Remove LaTeX delimiters if student wraps answer
+    .replace(/^\$+/, "").replace(/\$+$/, "")
+    .replace(/^\\[\(\[]/, "").replace(/\\[\)\]]$/, "")
+    // Normalize \left| \right| → |
+    .replace(/\\left\|/g, "|").replace(/\\right\|/g, "|")
     // LaTeX → symbol
     .replace(/\\pi/g, "π").replace(/\bpi\b/g, "π")
     .replace(/\\infty/g, "∞").replace(/\binfty\b/g, "∞")
+    // Unicode superscripts for π² etc.
+    .replace(/π²/g, "π^2").replace(/π³/g, "π^3")
     // sqrt variants → √
     .replace(/\\sqrt\{([^}]+)\}/g, "√($1)")
     .replace(/sqrt\(([^)]+)\)/g, "√($1)")
     // LaTeX fractions → a/b
     .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, "($1)/($2)")
-    // Remove outer wrapping parens from single terms: (3) → 3
-    .replace(/^\(([^()]+)\)$/, "$1")
+    // Tuple normalization: remove outer brackets/parens for coordinate-style answers
+    .replace(/^\[(.+)\]$/, "$1").replace(/^\((.+)\)$/, (_, inner) =>
+      inner.includes(",") ? inner : `(${inner})`
+    )
     // Common decimal ↔ fraction equivalences (normalize to fraction form)
     .replace(/\b0\.5\b/g, "1/2")
     .replace(/\b0\.25\b/g, "1/4")
@@ -33,9 +44,10 @@ function normalizeAnswer(s: string): string {
     // e^0 = 1
     .replace(/\be\^0\b/g, "1")
     .replace(/\be\^\{0\}/g, "1")
-    // Remove LaTeX delimiters if student wraps answer
-    .replace(/^\$+/, "").replace(/\$+$/, "")
-    .replace(/^\\[\(\[]/, "").replace(/\\[\)\]]$/, "");
+    // log/ln equivalences: \log → log, \ln → ln
+    .replace(/\\log/g, "log").replace(/\\ln/g, "ln")
+    // cdot, times → *
+    .replace(/\\cdot/g, "*").replace(/\\times/g, "*");
 }
 
 export async function POST(request: NextRequest) {
@@ -92,6 +104,18 @@ export async function POST(request: NextRequest) {
 
       // If we have exact answers, compare directly — no Claude needed regardless of whether steps exist
       if (answers && answers.length > 0) {
+        // Self-check: return the stored solution so the student can self-report
+        const hasSelfCheck = answers.some((a) => a.type === "self_check");
+        if (hasSelfCheck) {
+          const result: AnswerCheckResult = {
+            isCorrect: false,
+            selfCheck: true,
+            correctAnswer: ex?.solution_latex ?? "",
+            solutionSteps: steps,
+          };
+          return NextResponse.json(result);
+        }
+
         const allExact = answers.every((a) => a.type === "exact");
 
         if (allExact) {

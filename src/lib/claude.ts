@@ -198,7 +198,7 @@ export interface SolutionStep {
 
 export interface ExerciseAnswer {
   label: string;    // "Risultato", "a)", "b)", etc.
-  type: "exact" | "open";
+  type: "exact" | "open" | "self_check";
   value?: string;   // expected answer for exact type (normalized, no LaTeX delimiters)
 }
 
@@ -214,6 +214,7 @@ export interface AnswerCheckResult {
   correctAnswer: string;   // the correct final answer (LaTeX inline: $...$)
   solutionSteps: SolutionStep[];
   answerComparisons?: AnswerComparison[];
+  selfCheck?: boolean;     // true → student must self-report correctness (no AI, no pattern match)
 }
 
 export async function correctAnswer(
