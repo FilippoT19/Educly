@@ -160,7 +160,7 @@ export function ExerciseAIAgent({
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border/50 shrink-0">
           <Bot className="h-4 w-4 text-primary shrink-0" />
           <span className="font-semibold text-sm">Tutor AI</span>
-          <span className="ml-auto text-[10px] text-muted-foreground">20 msg/giorno</span>
+          <span className="ml-auto text-[10px] text-muted-foreground">10 msg/giorno</span>
         </div>
         {chatBody}
       </div>

@@ -5,8 +5,8 @@ import { isRateLimited } from "@/lib/rateLimit";
 import { anthropic } from "@/lib/claude";
 import type { SolutionStep } from "@/lib/claude";
 
-// 20 AI agent calls per day per user
-const RATE_LIMIT = 20;
+// 10 AI agent calls per day per user
+const RATE_LIMIT = 10;
 const RATE_WINDOW = 24 * 60 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
 
   if (isRateLimited(`ai-agent:${user.id}`, RATE_LIMIT, RATE_WINDOW)) {
     return NextResponse.json(
-      { error: "Limite giornaliero AI raggiunto (20 richieste/giorno). Riprova domani." },
+      { error: "Limite giornaliero AI raggiunto (10 messaggi/giorno). Riprova domani." },
       { status: 429 }
     );
   }
@@ -94,7 +94,9 @@ Passaggio ${step.step}: ${step.title}
 ${step.text}
 ${step.formula ? `Formula: ${step.formula}` : ""}
 
-Uno studente ha difficoltà con questo passaggio. Fornisci una spiegazione molto dettagliata e didattica, come se stessi spiegando a voce durante un ricevimento. Usa LaTeX per le formule ($...$ inline, $$...$$ display). Spiega il "perché" non solo il "come". Sii incoraggiante e chiaro.`;
+Uno studente ha difficoltà con questo passaggio. Fornisci una spiegazione molto dettagliata e didattica, come se stessi spiegando a voce durante un ricevimento. Usa LaTeX per le formule ($...$ inline, $$...$$ display). Spiega il "perché" non solo il "come". Sii incoraggiante e chiaro.
+
+IMPORTANTE: scrivi in testo semplice italiano. Non usare markdown (niente #, ##, **, *, -, ecc.). Solo testo con LaTeX per le formule.`;
 
       const response = await anthropic.messages.create({
         model: "claude-haiku-4-5-20251001",
@@ -124,7 +126,9 @@ ${stepsContext}
 DOMANDA DELLO STUDENTE:
 ${message}
 
-Rispondi in modo chiaro e didattico. Usa LaTeX per le formule ($...$ inline, $$...$$ display). Sii conciso ma completo.`;
+Rispondi in modo chiaro e didattico. Usa LaTeX per le formule ($...$ inline, $$...$$ display). Sii conciso ma completo.
+
+IMPORTANTE: scrivi in testo semplice italiano. Non usare markdown (niente #, ##, **, *, -, ecc.). Solo testo con LaTeX per le formule.`;
 
       const response = await anthropic.messages.create({
         model: "claude-haiku-4-5-20251001",

@@ -407,6 +407,7 @@ export function PracticeSession({
   const [reportSent, setReportSent] = useState(false);
   const [selfCheckPending, setSelfCheckPending] = useState(false);
   const [askMessage, setAskMessage] = useState<string | null>(null);
+  const [showNextModal, setShowNextModal] = useState(false);
 
   const savedRef = useRef(false);
 
@@ -971,13 +972,15 @@ export function PracticeSession({
             )}
           </div>
         </div>
-        {stats && (
-          <div className="text-right text-sm shrink-0">
-            <p className="font-semibold">{stats.exercises_done}</p>
-            {successRate !== null && (
-              <p className="text-[11px] text-muted-foreground">{successRate}%</p>
-            )}
-          </div>
+        {!selfCheckPending && (phase === "solution" || phase === "done") && (
+          <Button
+            size="sm"
+            className="shrink-0 gap-1.5"
+            onClick={() => setShowNextModal(true)}
+          >
+            Prossimo esercizio
+            <ChevronDown className="h-3.5 w-3.5 rotate-[-90deg]" />
+          </Button>
         )}
       </header>
 
@@ -988,6 +991,73 @@ export function PracticeSession({
           onSubmit={sendReport}
           appAnswer={checkResult?.correctAnswer ?? ""}
         />
+      )}
+
+      {/* Prossimo esercizio modal */}
+      {showNextModal && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowNextModal(false)} />
+          <div className="relative bg-background border border-border rounded-2xl shadow-2xl w-full max-w-md space-y-4 p-5 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-base">Prossimo esercizio</p>
+              <button
+                onClick={() => setShowNextModal(false)}
+                className="rounded-full p-1 hover:bg-muted transition-colors text-muted-foreground"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Stats */}
+            {stats && (
+              <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <p className="text-xl font-bold">{stats.exercises_done}</p>
+                  <p className="text-[11px] text-muted-foreground">Esercizi</p>
+                </div>
+                <div>
+                  <p className="text-xl font-bold">{stats.correct}</p>
+                  <p className="text-[11px] text-muted-foreground">Corretti</p>
+                </div>
+                <div>
+                  <p className="text-xl font-bold">{successRate ?? "—"}%</p>
+                  <p className="text-[11px] text-muted-foreground">% successo</p>
+                </div>
+              </div>
+            )}
+
+            {/* Recommendations or generic next */}
+            {recommendations.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Esercizi consigliati</p>
+                {recommendations.map(rec => (
+                  <RecommendationCard
+                    key={rec.exerciseId}
+                    rec={rec}
+                    onStart={() => {
+                      setShowNextModal(false);
+                      trackRecommendationClicked({ exerciseId: rec.exerciseId, isTop: rec.isTop });
+                      loadExercise(rec.exerciseId);
+                    }}
+                  />
+                ))}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="w-full text-muted-foreground gap-1.5"
+                  onClick={() => { setShowNextModal(false); loadExercise(); }}
+                >
+                  <Shuffle className="h-3.5 w-3.5" />
+                  Esercizio casuale
+                </Button>
+              </div>
+            ) : (
+              <Button className="w-full" onClick={() => { setShowNextModal(false); loadExercise(); }}>
+                Esercizio casuale
+              </Button>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Two-column body: left scrolls, right = AI panel */}
@@ -1152,14 +1222,12 @@ export function PracticeSession({
               </div>
             )}
 
-            {((phase === "solution" && !selfCheckPending) || phase === "done") && (
-              <RecommendationSection />
-            )}
+            {/* Recommendations moved to "Prossimo esercizio" modal */}
           </div>
         </div>
 
         {/* RIGHT — always-open AI panel */}
-        <div className="w-80 shrink-0 hidden md:flex flex-col">
+        <div className="w-[420px] shrink-0 hidden md:flex flex-col">
           <ExerciseAIAgent
             exerciseText={exercise?.text ?? ""}
             subject={subject}
