@@ -323,29 +323,33 @@ async function main() {
   let ok = 0, fail = 0, notFound = 0;
 
   for (const seed of ALL_SEEDS) {
-    // Look up the exercise by exercise_number
-    const { data: ex } = await supabase
+    // Check how many rows exist for this exercise_number
+    const { data: rows } = await supabase
       .from("exercises")
-      .select("id, answers")
-      .eq("exercise_number", seed.exercise_number)
-      .single();
+      .select("id")
+      .eq("exercise_number", seed.exercise_number);
 
-    if (!ex) {
+    if (!rows || rows.length === 0) {
       console.warn(`  NOT FOUND: ${seed.exercise_number}`);
       notFound++;
       continue;
     }
 
+    if (rows.length > 1) {
+      console.warn(`  WARNING: ${seed.exercise_number} has ${rows.length} duplicates — updating all`);
+    }
+
+    // Update all matching rows (handles duplicates from re-running parse script)
     const { error } = await supabase
       .from("exercises")
       .update({ answers: seed.answers })
-      .eq("id", ex.id);
+      .eq("exercise_number", seed.exercise_number);
 
     if (error) {
       console.error(`  FAILED ${seed.exercise_number}: ${error.message}`);
       fail++;
     } else {
-      console.log(`  ✓ ${seed.exercise_number} (${seed.answers.length} answers)`);
+      console.log(`  ✓ ${seed.exercise_number} (${seed.answers.length} answers, ${rows.length} rows)`);
       ok++;
     }
   }
