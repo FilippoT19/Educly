@@ -24,7 +24,8 @@
       "Bash(find /Users/filippotopinelli/Desktop/Educly -type f -name *.sql)",
       "Bash(grep -l \"CREATE TABLE.*exercises\" /Users/filippotopinelli/Desktop/Educly/supabase/*.sql)",
       "Bash(grep -n \"exercises\" /Users/filippotopinelli/Desktop/Educly/supabase/*.sql)",
-      "Bash(grep -n priority /Users/filippotopinelli/Desktop/Educly/src/app/api/admin/*.ts)"
+      "Bash(grep -n priority /Users/filippotopinelli/Desktop/Educly/src/app/api/admin/*.ts)",
+      "Bash(node -e \":*)"
     ],
     "defaultMode": "acceptEdits"
   }

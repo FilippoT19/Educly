@@ -38,6 +38,23 @@ export function MathText({ text, className }: MathTextProps) {
         }
       });
 
+      // Strip LaTeX text formatting commands (outside math mode)
+      processed = processed
+        .replace(/\\textbf\{([^}]*)\}/g, "<strong>$1</strong>")
+        .replace(/\\textit\{([^}]*)\}/g, "<em>$1</em>")
+        .replace(/\\underline\{([^}]*)\}/g, "<u>$1</u>")
+        .replace(/\\text\{([^}]*)\}/g, "$1")
+        .replace(/\\emph\{([^}]*)\}/g, "<em>$1</em>")
+        .replace(/\\noindent\b/g, "")
+        .replace(/\\medskip\b/g, "")
+        .replace(/\\bigskip\b/g, "")
+        .replace(/\\smallskip\b/g, "")
+        .replace(/\\vspace\{[^}]*\}/g, "")
+        .replace(/\\hspace\{[^}]*\}/g, "")
+        .replace(/\\item\b/g, "• ")
+        .replace(/\\begin\{(itemize|enumerate|list)[^}]*\}/g, "")
+        .replace(/\\end\{(itemize|enumerate|list)[^}]*\}/g, "");
+
       // Strip markdown formatting from AI responses
       processed = processed
         .replace(/^#{1,6}\s+(.+)$/gm, "<strong>$1</strong>")

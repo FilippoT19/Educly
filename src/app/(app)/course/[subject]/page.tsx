@@ -166,7 +166,7 @@ export default async function CoursePage({ params }: PageProps) {
         <h2 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-0.5">
           Capitoli
         </h2>
-        <div className="rounded-2xl border border-border overflow-hidden divide-y divide-border">
+        <div className="grid grid-cols-2 gap-2.5">
           {curriculum.topics.map((topic) => {
             const stat = statsMap.get(topic.id);
             const done = stat?.exercises_done ?? 0;
@@ -179,69 +179,48 @@ export default async function CoursePage({ params }: PageProps) {
               return (
                 <div
                   key={topic.id}
-                  className="flex items-center gap-3 px-4 py-3.5 opacity-50"
+                  className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-4 opacity-40"
                 >
-                  <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[11px] font-medium text-muted-foreground shrink-0">
-                    {topic.order}
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Cap. {topic.order}
                   </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13.5px] font-medium">{topic.name}</p>
-                  </div>
-                  <span className="text-[11px] text-muted-foreground shrink-0 italic">
-                    Prossimamente
-                  </span>
+                  <p className="text-[13px] font-semibold leading-snug">{topic.name}</p>
+                  <span className="text-[11px] text-muted-foreground italic mt-auto">Prossimamente</span>
                 </div>
               );
             }
 
+            const rateColor =
+              rate === null ? "text-muted-foreground"
+              : rate >= 70 ? "text-green-400"
+              : rate >= 40 ? "text-orange-400"
+              : "text-red-400";
+
             return (
               <Link
                 key={topic.id}
-                href={`/practice/${subject}/${topic.id}?back=/course/${subject}`}
-                className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/30 transition-colors group"
+                href={`/course/${subject}/topic/${topic.id}`}
+                className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-4 hover:border-primary/40 hover:bg-primary/3 transition-all group"
               >
-                <span
-                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${
-                    rate !== null && rate >= 70
-                      ? "bg-green-500/20 text-green-400"
-                      : rate !== null
-                      ? "bg-orange-500/20 text-orange-400"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {topic.order}
-                </span>
-                <div className="flex-1 min-w-0 space-y-1">
-                  <p className="text-[13.5px] font-medium">{topic.name}</p>
-                  {done > 0 && (
-                    <div className="flex items-center gap-2">
-                      <Progress value={rate ?? 0} className="h-[3px] flex-1" />
-                      <span className="text-[10px] text-muted-foreground shrink-0">
-                        {done}/{available}
-                      </span>
-                    </div>
-                  )}
-                  {done === 0 && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {available} {available === 1 ? "esercizio" : "esercizi"} disponibili
-                    </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Cap. {topic.order}
+                  </span>
+                  {rate !== null && (
+                    <span className={`text-[11px] font-semibold ${rateColor}`}>{rate}%</span>
                   )}
                 </div>
-                {rate !== null ? (
-                  <Badge
-                    variant={
-                      rate >= 70
-                        ? "default"
-                        : rate >= 40
-                        ? "secondary"
-                        : "destructive"
-                    }
-                    className="text-[11px] shrink-0"
-                  >
-                    {rate}%
-                  </Badge>
-                ) : null}
-                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0 group-hover:text-muted-foreground transition-colors" />
+                <p className="text-[13px] font-semibold leading-snug flex-1">{topic.name}</p>
+                {done > 0 ? (
+                  <div className="space-y-1">
+                    <Progress value={rate ?? 0} className="h-[3px]" />
+                    <p className="text-[10px] text-muted-foreground">{done}/{available} esercizi</p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground mt-auto">
+                    {available} {available === 1 ? "esercizio" : "esercizi"}
+                  </p>
+                )}
               </Link>
             );
           })}
