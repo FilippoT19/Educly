@@ -77,19 +77,23 @@ export async function POST(request: NextRequest) {
 
   const seenIds = (seen || []).map((s) => s.exercise_id);
 
-  // Try to fetch a pre-generated exercise from DB
-  let dbQuery = supabase
-    .from("exercises")
-    .select("*")
-    .eq("subject", subject)
-    .eq("topic_id", topicId)
-    .eq("difficulty", difficulty);
+  // Try to fetch a pre-generated exercise from DB — prefer priority=1 (professor-curated)
+  const buildDbQuery = (priority?: number) => {
+    let q = supabase
+      .from("exercises")
+      .select("*")
+      .eq("subject", subject)
+      .eq("topic_id", topicId)
+      .eq("difficulty", difficulty);
+    if (priority !== undefined) q = q.eq("priority", priority);
+    if (seenIds.length > 0) q = q.not("id", "in", `(${seenIds.join(",")})`);
+    return q.limit(10);
+  };
 
-  if (seenIds.length > 0) {
-    dbQuery = dbQuery.not("id", "in", `(${seenIds.join(",")})`);
+  let { data: dbExercises } = await buildDbQuery(1);
+  if (!dbExercises || dbExercises.length === 0) {
+    ({ data: dbExercises } = await buildDbQuery());
   }
-
-  const { data: dbExercises } = await dbQuery.limit(10);
 
   if (dbExercises && dbExercises.length > 0) {
     // Pick a random one from results

@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
   // 4. Build query — include question_latex for previews
   let query = supabase
     .from("exercises")
-    .select("id, topic_id, difficulty, concept_tags, question_latex")
+    .select("id, topic_id, difficulty, concept_tags, question_latex, priority")
     .eq("subject", subject);
 
   if (!targetConceptTags) {
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
   let pool = (candidates ?? []).filter(e => !passedIds.has(e.id));
 
   // 5. Score candidates if targeting a concept
-  type Candidate = { id: string; topic_id: string; difficulty: number; concept_tags: string[] | null; question_latex: string };
+  type Candidate = { id: string; topic_id: string; difficulty: number; concept_tags: string[] | null; question_latex: string; priority: number | null };
 
   let scoredPool: { e: Candidate; score: number }[];
 
@@ -116,11 +116,19 @@ export async function GET(request: NextRequest) {
         }, 0);
         return { e, score: overlap * 2 + weaknessScore };
       })
-      .sort((a, b) => b.score - a.score);
+      // Priority 1 (professor-curated) always before priority 2; within same priority, sort by score
+      .sort((a, b) => {
+        const pa = a.e.priority ?? 2;
+        const pb = b.e.priority ?? 2;
+        if (pa !== pb) return pa - pb;
+        return b.score - a.score;
+      });
   } else {
-    // Shuffle pool for variety
+    // Shuffle pool for variety, then stable-sort by priority so p=1 floats to top
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    scoredPool = shuffled.map(e => ({ e, score: 0 }));
+    scoredPool = shuffled
+      .map(e => ({ e, score: 0 }))
+      .sort((a, b) => (a.e.priority ?? 2) - (b.e.priority ?? 2));
   }
 
   // 6. Take top 3, trying to vary difficulty or topic slightly
@@ -134,13 +142,14 @@ export async function GET(request: NextRequest) {
   if (picks.length < 3) {
     let fallbackQuery = supabase
       .from("exercises")
-      .select("id, topic_id, difficulty, concept_tags, question_latex")
+      .select("id, topic_id, difficulty, concept_tags, question_latex, priority")
       .eq("subject", subject);
     if (currentExerciseId) fallbackQuery = fallbackQuery.neq("id", currentExerciseId);
     const { data: fb } = await fallbackQuery.limit(30);
     const fbPool = (fb ?? [])
       .filter(e => !passedIds.has(e.id) && !picks.some(p => p.id === e.id))
-      .sort(() => Math.random() - 0.5);
+      .sort(() => Math.random() - 0.5)
+      .sort((a, b) => (a.priority ?? 2) - (b.priority ?? 2));
     for (const e of fbPool) {
       if (picks.length >= 3) break;
       picks.push(e);
