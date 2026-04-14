@@ -51,6 +51,7 @@ interface Exercise {
   conceptTags?: string[];
   answerCount?: number;
   answerLabels?: string[];
+  hasStoredSteps?: boolean;
 }
 
 type Phase =
@@ -310,7 +311,7 @@ export function PracticeSession({
 
     const data = await res.json();
     setCurrentExerciseId(data.id ?? null);
-    setExercise(data);
+    setExercise({ ...data, hasStoredSteps: (data.solutionSteps || []).length > 0 });
     trackExerciseLoaded({ subject, topicId: topic.id, difficulty: data.difficulty, fromDb: data.fromDb ?? false });
     // Initialize one slot per exact answer (min 1)
     const count = Math.max(1, data.answerCount || 1);
@@ -554,16 +555,18 @@ export function PracticeSession({
             </div>
           )}
 
+          {exercise && (phase === "solving" || phase === "correcting") && (
+            <ExerciseAIAgent
+              exerciseText={exercise.text}
+              subject={subject}
+              phase={phase}
+              steps={[]}
+              hasStoredSteps={exercise.hasStoredSteps ?? false}
+            />
+          )}
+
           {(phase === "solving" || phase === "correcting") && exercise && (
             <>
-              {phase === "solving" && (
-                <ExerciseAIAgent
-                  exerciseText={exercise.text}
-                  subject={subject}
-                  phase={phase}
-                  steps={[]}
-                />
-              )}
               <Card>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
@@ -615,33 +618,20 @@ export function PracticeSession({
 
               {/* ── Answer inputs ── */}
               <div className="space-y-3">
-                <p className="text-sm font-medium">
+                <p className="text-sm font-medium text-foreground">
                   {studentAnswers.length > 1 ? "Le tue risposte" : "Risultato finale"}
                 </p>
 
-                {/* Shared math keyboard */}
-                <MathKeyboard
-                  inputRef={mathKbRef}
-                  value={studentAnswers[activeAnswerIdx] ?? ""}
-                  onChange={(v) => {
-                    setStudentAnswers(prev => {
-                      const next = [...prev];
-                      next[activeAnswerIdx] = v;
-                      return next;
-                    });
-                  }}
-                />
-
                 {/* One input per answer slot */}
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {studentAnswers.map((val, i) => {
                     const labels = getAnswerLabels(exercise);
                     return (
-                      <div key={i} className="flex items-center gap-2">
+                      <div key={i} className="space-y-1.5">
                         {studentAnswers.length > 1 && (
-                          <span className="text-sm font-semibold text-muted-foreground w-6 shrink-0 text-right">
+                          <p className="text-xs font-semibold text-muted-foreground px-1">
                             {labels[i]}
-                          </span>
+                          </p>
                         )}
                         <input
                           type="text"
@@ -659,14 +649,27 @@ export function PracticeSession({
                             setActiveAnswerIdx(i);
                           }}
                           onKeyDown={(e) => { if (e.key === "Enter" && i === studentAnswers.length - 1) submitAnswer(); }}
-                          placeholder={studentAnswers.length === 1 ? "Es: 3/4, pi/2, sqrt(2)…" : `Risposta ${labels[i]}`}
+                          placeholder={studentAnswers.length === 1 ? "Es: 3/4, pi/2, sqrt(2)…" : `Inserisci ${labels[i]}`}
                           disabled={phase === "correcting"}
-                          className="flex-1 rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 font-mono"
+                          className="w-full rounded-xl border border-input bg-background px-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60 font-mono"
                         />
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Math keyboard */}
+                <MathKeyboard
+                  inputRef={mathKbRef}
+                  value={studentAnswers[activeAnswerIdx] ?? ""}
+                  onChange={(v) => {
+                    setStudentAnswers(prev => {
+                      const next = [...prev];
+                      next[activeAnswerIdx] = v;
+                      return next;
+                    });
+                  }}
+                />
               </div>
 
               {error && <p className="text-sm text-destructive text-center">{error}</p>}
@@ -700,7 +703,7 @@ export function PracticeSession({
         subject={subject}
         phase={phase}
         steps={steps}
-        currentStepIndex={phase === "step_review" ? stepIndex : undefined}
+        hasStoredSteps={exercise?.hasStoredSteps ?? false}
       />
       <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-6">
         <div className="grid md:grid-cols-[1fr_280px] gap-6 items-start">
