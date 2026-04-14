@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Zap, ChevronRight, CheckCircle, XCircle, Circle } from "lucide-react";
+import { MathText } from "@/components/MathText";
 import analisi1 from "@/content/analisi1.json";
 import analisi2 from "@/content/analisi2.json";
 
@@ -129,9 +130,7 @@ export default async function TopicPage({ params }: PageProps) {
             {exerciseList.map((ex) => {
               const attempted = attemptMap.has(ex.id);
               const isCorrect = attemptMap.get(ex.id);
-              const preview = (ex.chapter_title || ex.question_latex || "")
-                .replace(/\$\$?[^$]*\$\$?/g, "…")
-                .slice(0, 90);
+              const previewText = ex.question_latex || ex.chapter_title || "Esercizio";
 
               return (
                 <Link
@@ -139,7 +138,7 @@ export default async function TopicPage({ params }: PageProps) {
                   href={`/practice/${subject}/${topicId}?exerciseId=${ex.id}&back=/course/${subject}/topic/${topicId}`}
                   className="flex items-start gap-3 p-3.5 rounded-xl border border-border bg-card hover:border-primary/30 hover:bg-primary/3 transition-all group"
                 >
-                  <div className="shrink-0 mt-0.5">
+                  <div className="shrink-0 mt-1">
                     {!attempted ? (
                       <Circle className="h-4 w-4 text-muted-foreground/40" />
                     ) : isCorrect ? (
@@ -149,9 +148,9 @@ export default async function TopicPage({ params }: PageProps) {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] leading-snug text-foreground/80 line-clamp-2">
-                      {preview || "Esercizio"}
-                    </p>
+                    <div className="text-[13px] leading-snug text-foreground/80 line-clamp-3 overflow-hidden">
+                      <MathText text={previewText} className="text-[13px] leading-snug" />
+                    </div>
                     <div className="flex items-center gap-2 mt-1.5">
                       <Badge variant="outline" className={`text-[10px] ${DIFFICULTY_COLORS[ex.difficulty ?? 1]}`}>
                         {DIFFICULTY_LABELS[ex.difficulty ?? 1]}
