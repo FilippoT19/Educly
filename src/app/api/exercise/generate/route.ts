@@ -30,7 +30,10 @@ export async function POST(request: NextRequest) {
     if (!ex) return NextResponse.json({ error: "Esercizio non trovato" }, { status: 404 });
     const answers = ex.answers || [];
     const allAnswers: { type: string; label: string; options?: string[] }[] = Array.isArray(answers) ? answers : [];
+    const noAnswersDefined = allAnswers.length === 0;
     const hasSelfCheck = allAnswers.some((a) => a.type === "self_check");
+    // If no answers configured and solution exists → self_check
+    const forceSelfCheck = noAnswersDefined && !!ex.solution_latex;
     return NextResponse.json({
       id: ex.id,
       text: ex.question_latex,
@@ -43,9 +46,10 @@ export async function POST(request: NextRequest) {
       solutionExact: ex.solution_exact || null,
       solutionSteps: ex.solution_steps || [],
       conceptTags: ex.concept_tags || [],
-      answerCount: hasSelfCheck ? 1 : Math.max(allAnswers.length, 1),
-      answerLabels: hasSelfCheck ? ["Risposta"] : allAnswers.map((a) => a.label || "Risultato"),
-      answerOptions: hasSelfCheck ? [null] : allAnswers.map((a) => a.options ?? null),
+      answerCount: 1,
+      answerLabels: ["Risposta"],
+      answerOptions: (forceSelfCheck || hasSelfCheck) ? [null] : allAnswers.map((a) => a.options ?? null),
+      forceSelfCheck: forceSelfCheck || hasSelfCheck,
     });
   }
 
@@ -106,7 +110,9 @@ export async function POST(request: NextRequest) {
 
     const pickedAnswers = picked.answers || [];
     const pickedAll: { type: string; label: string; options?: string[] }[] = Array.isArray(pickedAnswers) ? pickedAnswers : [];
+    const pickedNoAnswers = pickedAll.length === 0;
     const pickedSelfCheck = pickedAll.some((a) => a.type === "self_check");
+    const pickedForceSelfCheck = pickedNoAnswers && !!picked.solution_latex;
     return NextResponse.json({
       id: picked.id,
       text: picked.question_latex,
@@ -119,9 +125,10 @@ export async function POST(request: NextRequest) {
       solutionExact: picked.solution_exact || null,
       solutionSteps: picked.solution_steps || [],
       conceptTags: picked.concept_tags || [],
-      answerCount: pickedSelfCheck ? 1 : Math.max(pickedAll.length, 1),
-      answerLabels: pickedSelfCheck ? ["Risposta"] : pickedAll.map((a) => a.label || "Risultato"),
-      answerOptions: pickedSelfCheck ? [null] : pickedAll.map((a) => a.options ?? null),
+      answerCount: (pickedForceSelfCheck || pickedSelfCheck) ? 1 : Math.max(pickedAll.length, 1),
+      answerLabels: (pickedForceSelfCheck || pickedSelfCheck) ? ["Risposta"] : pickedAll.map((a) => a.label || "Risultato"),
+      answerOptions: (pickedForceSelfCheck || pickedSelfCheck) ? [null] : pickedAll.map((a) => a.options ?? null),
+      forceSelfCheck: pickedForceSelfCheck || pickedSelfCheck,
     });
   }
 

@@ -102,6 +102,17 @@ export async function POST(request: NextRequest) {
       const answers = ex?.answers as ExerciseAnswer[] | null;
       const steps = (ex?.solution_steps as SolutionStep[] | null) ?? [];
 
+      // No answers configured but solution exists → self_check automatically
+      if ((!answers || answers.length === 0) && ex?.solution_latex) {
+        const result: AnswerCheckResult = {
+          isCorrect: false,
+          selfCheck: true,
+          correctAnswer: ex.solution_latex,
+          solutionSteps: steps,
+        };
+        return NextResponse.json(result);
+      }
+
       // If we have exact answers, compare directly — no Claude needed regardless of whether steps exist
       if (answers && answers.length > 0) {
         // Self-check: return the stored solution so the student can self-report
