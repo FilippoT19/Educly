@@ -21,21 +21,22 @@ export async function POST(request: NextRequest) {
     created_at: new Date().toISOString(),
   });
 
-  // Webhook notification (Slack, Discord, Make, etc.)
+  // Telegram notification
   const webhookUrl = process.env.REPORT_WEBHOOK_URL;
   if (webhookUrl) {
     const text =
-      `🚨 *Segnalazione correzione errata*\n` +
-      `Studente: ${user.email}\n` +
-      `Esercizio: ${exerciseId ?? "n/a"} — ${subject} / ${topicId}\n` +
-      `Risposta studente: \`${studentAnswer}\`\n` +
-      `Risposta app: \`${appAnswer}\`\n` +
-      (reportedCorrectAnswer ? `Risposta segnalata corretta: \`${reportedCorrectAnswer}\`` : "");
+      `🚨 *Segnalazione correzione errata*\n\n` +
+      `👤 Studente: ${user.email}\n` +
+      `📚 Esercizio: \`${exerciseId ?? "n/a"}\`\n` +
+      `📖 Materia: ${subject} / ${topicId}\n` +
+      `✏️ Risposta studente: \`${studentAnswer}\`\n` +
+      `🤖 Risposta app: \`${appAnswer}\`` +
+      (reportedCorrectAnswer ? `\n✅ Risposta corretta segnalata: \`${reportedCorrectAnswer}\`` : "");
 
     fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, parse_mode: "Markdown" }),
     }).catch(() => {});
   }
 
