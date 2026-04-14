@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { correctAnswer } from "@/lib/claude";
 import { isRateLimited } from "@/lib/rateLimit";
 import { getPostHogClient } from "@/lib/posthog-server";
-import type { ExerciseAnswer, SolutionStep, AnswerCheckResult } from "@/lib/claude";
+import type { ExerciseAnswer, SolutionStep, AnswerCheckResult, AnswerComparison } from "@/lib/claude";
 
 function normalizeAnswer(s: string): string {
   return s
@@ -94,12 +94,19 @@ export async function POST(request: NextRequest) {
             const expected = answers[0].value ?? "";
             const isCorrect =
               normalizeAnswer(studentAnswer) === normalizeAnswer(expected);
-            const correctAnswerStr = answers[0].value ?? "";
+
+            const answerComparisons: AnswerComparison[] = [{
+              label: answers[0].label || "Risultato",
+              studentAnswer: studentAnswer.trim(),
+              correctAnswer: `$${expected}$`,
+              isCorrect,
+            }];
 
             const result: AnswerCheckResult = {
               isCorrect,
-              correctAnswer: `$${correctAnswerStr}$`,
+              correctAnswer: `$${expected}$`,
               solutionSteps: steps,
+              answerComparisons,
             };
             getPostHogClient().capture({
               distinctId: user.id,
@@ -116,18 +123,23 @@ export async function POST(request: NextRequest) {
             .filter((p: string) => p.length > 0);
 
           if (parts.length === answers.length) {
-            const allMatch = answers.every(
-              (a, i) =>
-                normalizeAnswer(parts[i]) === normalizeAnswer(a.value ?? "")
+            const perPartCorrect = answers.map(
+              (a, i) => normalizeAnswer(parts[i]) === normalizeAnswer(a.value ?? "")
             );
-            const correctAnswerStr = answers
-              .map((a) => `${a.label}: $${a.value ?? ""}$`)
-              .join(" | ");
+            const allMatch = perPartCorrect.every(Boolean);
+
+            const answerComparisons: AnswerComparison[] = answers.map((a, i) => ({
+              label: a.label,
+              studentAnswer: parts[i] ?? "",
+              correctAnswer: `$${a.value ?? ""}$`,
+              isCorrect: perPartCorrect[i],
+            }));
 
             const result: AnswerCheckResult = {
               isCorrect: allMatch,
-              correctAnswer: correctAnswerStr,
+              correctAnswer: answers.map((a) => `${a.label}: $${a.value ?? ""}$`).join(" | "),
               solutionSteps: steps,
+              answerComparisons,
             };
             getPostHogClient().capture({
               distinctId: user.id,

@@ -202,10 +202,18 @@ export interface ExerciseAnswer {
   value?: string;   // expected answer for exact type (normalized, no LaTeX delimiters)
 }
 
+export interface AnswerComparison {
+  label: string;           // "Risultato", "a)", "b)", etc.
+  studentAnswer: string;   // what the student typed
+  correctAnswer: string;   // correct answer (may include LaTeX $...$)
+  isCorrect: boolean;
+}
+
 export interface AnswerCheckResult {
   isCorrect: boolean;
   correctAnswer: string;   // the correct final answer (LaTeX inline: $...$)
   solutionSteps: SolutionStep[];
+  answerComparisons?: AnswerComparison[];
 }
 
 export async function correctAnswer(
