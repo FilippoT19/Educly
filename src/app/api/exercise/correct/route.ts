@@ -67,11 +67,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { subject, topicName, exerciseText, studentAnswer, exerciseId } = await request.json();
+  const { subject, topicName, exerciseText, studentAnswer, studentAnswers, exerciseId } = await request.json();
 
   if (!studentAnswer?.trim()) {
     return NextResponse.json({ error: "Risposta mancante" }, { status: 400 });
   }
+
+  // studentAnswers is an array of per-part answers (preferred), studentAnswer is the joined fallback
+  const answersArray: string[] = Array.isArray(studentAnswers) && studentAnswers.length > 0
+    ? studentAnswers.map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+    : [];
 
   try {
     // If exercise is from DB, check if we have pre-stored answers and steps
@@ -116,11 +121,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(result);
           }
 
-          // Multiple exact answers — try to split student answer and compare each part
-          const parts = studentAnswer
-            .split(/[;,]/)
-            .map((p: string) => p.trim())
-            .filter((p: string) => p.length > 0);
+          // Multiple exact answers — prefer the array sent from the client, fall back to splitting
+          const parts: string[] = answersArray.length === answers.length
+            ? answersArray
+            : studentAnswer.split(/[;,]/).map((p: string) => p.trim()).filter((p: string) => p.length > 0);
 
           if (parts.length === answers.length) {
             const perPartCorrect = answers.map(

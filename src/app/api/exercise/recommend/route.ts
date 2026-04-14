@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 export interface RecommendationItem {
   exerciseId: string;
   topicId: string;
+  difficulty: number;
   reason: string;
   questionPreview: string; // truncated question_latex for preview
   isTop: boolean;
@@ -153,6 +154,7 @@ export async function GET(request: NextRequest) {
   const recommendations: RecommendationItem[] = picks.map((pick, i) => ({
     exerciseId: pick.id,
     topicId: pick.topic_id,
+    difficulty: pick.difficulty,
     reason,
     questionPreview: truncatePreview(pick.question_latex ?? ""),
     isTop: i === 0,

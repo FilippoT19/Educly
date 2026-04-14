@@ -79,11 +79,11 @@ function AnswerComparisonCard({
   onReport: () => void;
 }) {
   return (
-    <div className={`rounded-xl border px-4 py-3 ${
-      overallCorrect ? "border-green-500/30 bg-green-500/5" : "border-red-400/30 bg-red-500/5"
-    }`}>
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className={`flex items-center justify-between px-4 py-2.5 ${
+        overallCorrect ? "bg-green-500/10" : "bg-red-500/10"
+      }`}>
         <div className="flex items-center gap-2">
           {overallCorrect
             ? <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
@@ -95,35 +95,39 @@ function AnswerComparisonCard({
         <button
           onClick={onReport}
           className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-          title="Segnala correzione errata"
         >
           <Flag className="h-3 w-3" />
           Segnala errore
         </button>
       </div>
 
-      {/* Column headers */}
-      <div className="grid grid-cols-[1fr_1fr_auto] gap-x-3 gap-y-2 items-center">
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">La tua risposta</p>
-        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Risposta corretta</p>
-        <span />
-
+      {/* One row per answer part */}
+      <div className="divide-y divide-border/50">
         {comparisons.map((c, i) => (
-          <>
-            {/* Optional label row */}
+          <div key={i} className="px-4 py-3">
+            {/* Label (always shown for multi-part, hidden for single) */}
             {comparisons.length > 1 && (
-              <p key={`lbl-${i}`} className="col-span-3 text-[11px] font-semibold text-muted-foreground mt-1">{c.label}</p>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide mb-2">{c.label}</p>
             )}
-            <p key={`st-${i}`} className="font-mono text-sm break-all">{c.studentAnswer || "—"}</p>
-            <div key={`co-${i}`}>
-              <MathText text={c.correctAnswer} className="text-sm font-medium" />
+            <div className="flex items-start gap-3">
+              {/* Student answer */}
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-muted-foreground mb-0.5">La tua risposta</p>
+                <p className="font-mono text-sm break-all">{c.studentAnswer || "—"}</p>
+              </div>
+              {/* Correct answer */}
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-muted-foreground mb-0.5">Risposta corretta</p>
+                <MathText text={c.correctAnswer} className="text-sm font-medium" />
+              </div>
+              {/* Verdict icon */}
+              <div className="shrink-0 mt-4">
+                {c.isCorrect
+                  ? <CheckCircle className="h-4 w-4 text-green-500" />
+                  : <XCircle className="h-4 w-4 text-red-400" />}
+              </div>
             </div>
-            <div key={`ic-${i}`} className="flex justify-center">
-              {c.isCorrect
-                ? <CheckCircle className="h-4 w-4 text-green-500" />
-                : <XCircle className="h-4 w-4 text-red-400" />}
-            </div>
-          </>
+          </div>
         ))}
       </div>
     </div>
@@ -285,14 +289,19 @@ function RecommendationCard({
         : "border-border/50 bg-card"
     }`}>
       <div className="px-4 pt-4 pb-2 space-y-2">
-        {rec.isTop && (
-          <div className="flex items-center gap-1.5">
-            <Target className="h-3 w-3 text-primary shrink-0" />
-            <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
-              Consigliato
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {rec.isTop && (
+            <div className="flex items-center gap-1">
+              <Target className="h-3 w-3 text-primary shrink-0" />
+              <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
+                Consigliato
+              </span>
+            </div>
+          )}
+          <Badge variant="outline" className={`text-[10px] ml-auto ${DIFFICULTY_COLORS[rec.difficulty] ?? ""}`}>
+            {DIFFICULTY_LABELS[rec.difficulty] ?? ""}
+          </Badge>
+        </div>
         <div className={`text-xs leading-snug text-foreground/70 ${expanded ? "" : "line-clamp-3"}`}>
           <MathText text={rec.questionPreview} className="text-xs" />
         </div>
@@ -439,6 +448,7 @@ export function PracticeSession({
         topicName: topic.name,
         exerciseText: exercise.text,
         studentAnswer: combinedAnswer,
+        studentAnswers: studentAnswers.map(s => s.trim()),
         exerciseId: currentExerciseId ?? undefined,
       }),
     });
@@ -530,6 +540,24 @@ export function PracticeSession({
   async function sendReport(reportedAnswer: string) {
     setShowReportModal(false);
     setReportSent(true);
+
+    // Mark as correct in UI immediately
+    if (checkResult) {
+      const corrected: AnswerCheckResult = {
+        ...checkResult,
+        isCorrect: true,
+        answerComparisons: checkResult.answerComparisons?.map(c => ({ ...c, isCorrect: true })),
+      };
+      setCheckResult(corrected);
+      const score = hintsUsed ? 70 : 100;
+      setFinalScore(score);
+      // Move to solution view if still in step_review
+      if (phase === "step_review") setPhase("solution");
+      // Re-save with correct = true (bypass savedRef guard)
+      savedRef.current = false;
+      saveResult(corrected, score);
+    }
+
     await fetch("/api/exercise/report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
