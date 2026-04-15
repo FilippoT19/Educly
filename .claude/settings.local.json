@@ -30,7 +30,11 @@
       "Bash(git stash:*)",
       "Bash(printf \"y\\\\ny\\\\n\")",
       "Bash(npx shadcn@latest init --preset b1Ymqvgiu --template next)",
-      "Bash(yes)"
+      "Bash(yes)",
+      "Bash(grep -r asChild src/components/ui/ src/app/ --include=*.tsx -l)",
+      "Bash(grep -r from.*@base-ui node_modules/@base-ui/react/tabs/index.d.ts)",
+      "Bash(node -e \"const t = require\\(''''@base-ui/react/tabs''''\\); console.log\\(Object.keys\\(t\\)\\)\")",
+      "Bash(npm install:*)"
     ],
     "defaultMode": "acceptEdits"
   }
