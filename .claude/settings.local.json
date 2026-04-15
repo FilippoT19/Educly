@@ -34,7 +34,18 @@
       "Bash(grep -r asChild src/components/ui/ src/app/ --include=*.tsx -l)",
       "Bash(grep -r from.*@base-ui node_modules/@base-ui/react/tabs/index.d.ts)",
       "Bash(node -e \"const t = require\\(''''@base-ui/react/tabs''''\\); console.log\\(Object.keys\\(t\\)\\)\")",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "WebFetch(domain:ui.shadcn.com)",
+      "WebSearch",
+      "Bash(curl -s \"https://ui.shadcn.com/api/create/b1Ymqvgiu\")",
+      "Bash(curl -s \"https://ui.shadcn.com/create/b1Ymqvgiu\" -H \"Accept: application/json\")",
+      "Bash(curl -s \"https://ui.shadcn.com/create?preset=b1Ymqvgiu\")",
+      "Bash(curl -s \"https://ui.shadcn.com/r/styles/base-nova/b1Ymqvgiu.json\" 2)",
+      "Bash(1 curl:*)",
+      "Bash(curl -s \"https://ui.shadcn.com/create?preset=b1Ymqvgiu\" -H \"Accept: text/x-component\" -H \"RSC: 1\")",
+      "Bash(DPL=\"dpl_ngnrjxektvsLQ31ic4qTjEQ5hNg3\" curl -s \"https://ui.shadcn.com/_next/static/chunks/3027829d0f952d8a.js?$DPL\")",
+      "Bash(python3:*)",
+      "Bash(npx shadcn@latest add --overwrite badge card input label progress select separator)"
     ],
     "defaultMode": "acceptEdits"
   }

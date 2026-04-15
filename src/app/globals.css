@@ -48,49 +48,32 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ─── Light — Apple HIG system colors ─────────────────────────────────────── */
 :root {
-  /* Grouped background (Apple secondarySystemBackground #F2F2F7) */   /* label #1D1D1F */
-
-  /* Surface (Apple systemBackground — white cards on grouped bg) */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
-
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-
-  /* Primary — Apple system blue #0071E3 */
   --primary: oklch(0.488 0.243 264.376);
   --primary-foreground: oklch(0.97 0.014 254.604);
-
-  /* Secondary fills */
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
-
-  /* Muted — Apple tertiarySystemBackground */
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);   /* secondaryLabel #6E6E73 */
-
+  --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
-
-  /* Separator #E5E5EA */
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-
   --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);   /* green */
-  --chart-3: oklch(0.546 0.245 262.881);    /* yellow */
-  --chart-4: oklch(0.488 0.243 264.376);    /* red */
-  --chart-5: oklch(0.424 0.199 265.638);   /* purple */
-
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
   --radius: 0.625rem;
-
-  /* Sidebar — Apple dark (Xcode/Final Cut style) */
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.546 0.245 262.881);
@@ -99,51 +82,33 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
 }
 
-/* ─── Dark — Apple HIG dark system colors ──────────────────────────────────── */
 .dark {
-  /* True black background (iOS/iPadOS dark mode) */
   --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);   /* #F5F5F7 */
-
-  /* Elevated surface (#1C1C1E) */
+  --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
-
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-
-  /* Apple dark blue #0A84FF */
   --primary: oklch(0.424 0.199 265.638);
   --primary-foreground: oklch(0.97 0.014 254.604);
-
-  /* #2C2C2E */
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
-
   --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);   /* rgba(235,235,245,0.6) */
-
+  --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
-
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.985 0 0);
-
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-
   --chart-1: oklch(0.809 0.105 251.813);
   --chart-2: oklch(0.623 0.214 259.815);
   --chart-3: oklch(0.546 0.245 262.881);
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
-
-  /* Sidebar stays same */
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.623 0.214 259.815);
@@ -154,70 +119,16 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-/* ─── Base ─────────────────────────────────────────────────────────────────── */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-
-  html {
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    font-family: var(--font-inter), system-ui, sans-serif;
-    @apply font-sans;
-  }
-
   body {
     @apply bg-background text-foreground;
-    font-size: 15px;
-    line-height: 1.55;
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-space-grotesk), var(--font-inter), system-ui, sans-serif;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
   }
 }
 
-/* ─── Card elevation (Apple-style) ─────────────────────────────────────────── */
-/* Light: white card sits on #F2F2F7 — border alone is enough */
-[data-slot="card"] {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-
-/* Dark: elevated surface needs subtle highlight */
-.dark [data-slot="card"] {
-  border-color: oklch(1 0 0 / 9%) !important;
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 6%),
-    0 1px 4px rgba(0, 0, 0, 0.3);
-}
-
-/* ─── Progress bar ──────────────────────────────────────────────────────────── */
-[role="progressbar"] > * {
-  background: var(--primary);
-  border-radius: 99px;
-}
-
-/* ─── Scrollbar ─────────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: oklch(0.839 0.005 264);
-  border-radius: 99px;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: oklch(0.300 0.005 264);
-}
-
-/* ─── Focus ring ─────────────────────────────────────────────────────────────── */
-:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
-/* ─── KaTeX display math — allow horizontal scroll on long formulas ──────────── */
+/* KaTeX display math — allow horizontal scroll on long formulas */
 .katex-display {
   overflow-x: auto;
   overflow-y: hidden;
