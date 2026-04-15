@@ -455,10 +455,206 @@ const calcoloDiffAnswers: ExerciseSeed[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FILE 5 — 05 esercizi estremi 1.md
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ESMS = ["minimo", "massimo", "sella"];
+
+const estremiAnswers: ExerciseSeed[] = [
+  {
+    // f=e^x(x-1)(y-1)+(y-1)^2 → punti critici (0,3/2) minimo, (1,1) sella
+    exercise_number: "05_esercizi_estremi_1_1",
+    answers: [
+      choose("Natura di (0, 3/2)", "minimo", ESMS),
+      choose("Natura di (1, 1)", "sella", ESMS),
+    ],
+  },
+  {
+    // f=y²/4-(y+1)cos x → (2π/3,-1),(4π/3,-1) sella; (0,2),(π,-2) minimo
+    exercise_number: "05_esercizi_estremi_1_2",
+    answers: [
+      choose("Natura di (2π/3, -1) e (4π/3, -1)", "sella", ESMS),
+      choose("Natura di (0, 2) e (π, -2)", "minimo", ESMS),
+    ],
+  },
+  {
+    // f=xye^{-(x²+y²)/2} → (0,0) sella; (1,1),(-1,-1) massimo; (1,-1),(-1,1) minimo
+    exercise_number: "05_esercizi_estremi_1_3",
+    answers: [
+      choose("Natura di (0, 0)", "sella", ESMS),
+      choose("Natura di (1,1) e (-1,-1)", "massimo", ESMS),
+      choose("Natura di (1,-1) e (-1,1)", "minimo", ESMS),
+    ],
+  },
+  {
+    // f=xy(x-1)² — parte a: natura dei punti critici
+    exercise_number: "05_esercizi_estremi_1_4",
+    answers: [
+      sc("a) Natura di (0,0) e dei punti (1,y)"),
+      exact("b) Minimo assoluto in D", "0"),
+      exact("b) Massimo assoluto in D", "\\frac{27}{256}"),
+    ],
+  },
+  {
+    // Scatola volume v superficie minima → x=y=z=∛v
+    exercise_number: "05_esercizi_estremi_1_5",
+    answers: [
+      exact("Dimensioni ottimali (x=y=z)", "\\sqrt[3]{v}"),
+    ],
+  },
+  {
+    // f=e^{2x-x²-y²} — a) estremo relativo; b) estremi assoluti in disco r≤2
+    exercise_number: "05_esercizi_estremi_1_6",
+    answers: [
+      choose("a) Natura di (1, 0)", "massimo", ESMS),
+      exact("b) Massimo assoluto in D", "e"),
+      exact("b) Minimo assoluto in D", "e^{-8}"),
+    ],
+  },
+  {
+    // f=e^x - λx + y² ha estremo relativo ↔ λ>0
+    exercise_number: "05_esercizi_estremi_1_7",
+    answers: [
+      choose("Per quali λ esiste un estremo relativo?", "λ > 0", ["λ > 0", "λ < 0", "λ = 0", "qualsiasi λ"]),
+    ],
+  },
+  {
+    // f(x,y)=g(xy): derivate, origine punto critico, condizione sella
+    exercise_number: "05_esercizi_estremi_1_8",
+    answers: [
+      sc("Calcola le derivate parziali fino al 2° ordine di f(x,y)=g(xy)"),
+      choose("Condizione su g perché l'origine sia un punto di sella", "g'(0) ≠ 0", ["g'(0) ≠ 0", "g''(0) ≠ 0", "g'(0) = 0"]),
+    ],
+  },
+  {
+    // f=1/√(x²-y²): dominio, curve di livello, piano tangente, no estremi
+    exercise_number: "05_esercizi_estremi_1_9",
+    answers: [
+      sc("a) Dominio D di f"),
+      sc("b) Curve di livello"),
+      sc("c) Equazione piano tangente in (1,0,1) e direzione massima crescita"),
+      sc("d) Perché f non ha estremi locali"),
+    ],
+  },
+  {
+    // f=x⁴-x²y²: a) estremi in R²; b) massimo/minimo assoluto in R²
+    exercise_number: "05_esercizi_estremi_1_10",
+    answers: [
+      sc("a) Estremi relativi di f in R²"),
+      yn("b) f ha massimo assoluto in R²?", "no"),
+      yn("b) f ha minimo assoluto in R²?", "no"),
+    ],
+  },
+  {
+    // f=x³-xy²+y⁴ → (0,0) sella; (1/6,±1/(2√3)) minimo
+    exercise_number: "05_esercizi_estremi_1_11",
+    answers: [
+      choose("Natura di (0, 0)", "sella", ESMS),
+      choose("Natura di (1/6, ±1/(2√3))", "minimo", ESMS),
+    ],
+  },
+  {
+    // f=x⁴-6x²y²+y⁴ → (0,0) sella
+    exercise_number: "05_esercizi_estremi_1_12",
+    answers: [
+      choose("Natura di (0, 0)", "sella", ESMS),
+    ],
+  },
+  {
+    // f=x⁴+y⁴-2(x²+y²) → (0,0) massimo; (±1,0),(0,±1) sella; (±1,±1) minimo
+    exercise_number: "05_esercizi_estremi_1_13",
+    answers: [
+      choose("Natura di (0, 0)", "massimo", ESMS),
+      choose("Natura di (±1,0) e (0,±1)", "sella", ESMS),
+      choose("Natura di (±1,±1)", "minimo", ESMS),
+    ],
+  },
+  {
+    // f=(x²+y²-1)²(x+y): punti della circonferenza x²+y²=1
+    exercise_number: "05_esercizi_estremi_1_14",
+    answers: [
+      sc("Natura dei punti della circonferenza x²+y²=1 per f"),
+    ],
+  },
+  {
+    // f=2xy in disco r≤2 → max 4, min -4
+    exercise_number: "05_esercizi_estremi_1_15",
+    answers: [
+      exact("Massimo assoluto", "4"),
+      exact("Minimo assoluto", "-4"),
+    ],
+  },
+  {
+    // Minima distanza di y=16/x² dall'origine → 2√3
+    exercise_number: "05_esercizi_estremi_1_16",
+    answers: [
+      exact("Minima distanza", "2\\sqrt{3}"),
+    ],
+  },
+  {
+    // f=√(1-x²-y²/9)+2x: a) dominio; b) differenziabilità; c) min=-2, max=√5
+    exercise_number: "05_esercizi_estremi_1_17",
+    answers: [
+      sc("a) Dominio D di f"),
+      yn("b) f è differenziabile nei punti interni di D?", "si"),
+      exact("c) Minimo assoluto", "-2"),
+      exact("c) Massimo assoluto", "\\sqrt{5}"),
+    ],
+  },
+  {
+    // f=xy vincolata a x²+y²=1 → max 1/2, min -1/2
+    exercise_number: "05_esercizi_estremi_1_18",
+    answers: [
+      exact("Massimo vincolato", "\\frac{1}{2}"),
+      exact("Minimo vincolato", "-\\frac{1}{2}"),
+    ],
+  },
+  {
+    // f=xy vincolata a x²+4y²=1 → max 1/4, min -1/4
+    exercise_number: "05_esercizi_estremi_1_19",
+    answers: [
+      exact("Massimo vincolato", "\\frac{1}{4}"),
+      exact("Minimo vincolato", "-\\frac{1}{4}"),
+    ],
+  },
+  {
+    // f=x+y vincolata a xy=1, x>0 → nessun massimo, min=2 in (1,1)
+    exercise_number: "05_esercizi_estremi_1_20",
+    answers: [
+      yn("Esiste un massimo vincolato?", "no"),
+      exact("Minimo vincolato", "2"),
+    ],
+  },
+  {
+    // f=e^{-(x²+y²)} su retta 3x+4y=25 → max e^{-25} in (3,4), inf=0
+    exercise_number: "05_esercizi_estremi_1_21",
+    answers: [
+      exact("Massimo (estremo superiore)", "e^{-25}"),
+      sc("Verifica che ∇f(3,4) è perpendicolare alla retta 3x+4y=25"),
+    ],
+  },
+  {
+    // f=1-e^{(x-y)²(x²+y²-1)²} su D: max=0 sulla frontiera
+    exercise_number: "05_esercizi_estremi_1_22",
+    answers: [
+      exact("Massimo assoluto in D", "0"),
+      sc("Minimo assoluto in D (trova il punto stazionario interno)"),
+    ],
+  },
+  {
+    // f=4x(x²-y²)-3x²+y² vincolata a x²-y²=1/4 → max=-1/4 in (1/2,0)
+    exercise_number: "05_esercizi_estremi_1_23",
+    answers: [
+      exact("Massimo vincolato", "-\\frac{1}{4}"),
+    ],
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Upload
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ALL_SEEDS = [...curveAnswers, ...funzioniAnswers, ...limitiAnswers, ...calcoloDiffAnswers];
+const ALL_SEEDS = [...curveAnswers, ...funzioniAnswers, ...limitiAnswers, ...calcoloDiffAnswers, ...estremiAnswers];
 
 async function main() {
   console.log(`\nSeeding answers for ${ALL_SEEDS.length} exercises…\n`);

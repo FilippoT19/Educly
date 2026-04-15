@@ -16,7 +16,6 @@
       "Bash(npx next:*)",
       "Bash(npm run:*)",
       "Bash(node_modules/typescript/bin/tsc --noEmit)",
-      "Bash(grep -v \"^\\(node\\\\|Reparsing\\\\|To eliminate\\\\|Use \\\\`node\\\\|◇\\)\")",
       "Bash(grep -v \"Warning\\\\|Reparsing\\\\|◇\\\\|eliminate\\\\|Use \\\\`\")",
       "Bash(grep -v \"Warning:\\\\|Reparsing\\\\|◇\\\\|eliminate\\\\|Use \\\\`\")",
       "Bash(node node_modules/next/dist/bin/next build)",
@@ -33,7 +32,6 @@
       "Bash(yes)",
       "Bash(grep -r asChild src/components/ui/ src/app/ --include=*.tsx -l)",
       "Bash(grep -r from.*@base-ui node_modules/@base-ui/react/tabs/index.d.ts)",
-      "Bash(node -e \"const t = require\\(''''@base-ui/react/tabs''''\\); console.log\\(Object.keys\\(t\\)\\)\")",
       "Bash(npm install:*)",
       "WebFetch(domain:ui.shadcn.com)",
       "WebSearch",
@@ -45,7 +43,8 @@
       "Bash(curl -s \"https://ui.shadcn.com/create?preset=b1Ymqvgiu\" -H \"Accept: text/x-component\" -H \"RSC: 1\")",
       "Bash(DPL=\"dpl_ngnrjxektvsLQ31ic4qTjEQ5hNg3\" curl -s \"https://ui.shadcn.com/_next/static/chunks/3027829d0f952d8a.js?$DPL\")",
       "Bash(python3:*)",
-      "Bash(npx shadcn@latest add --overwrite badge card input label progress select separator)"
+      "Bash(npx shadcn@latest add --overwrite badge card input label progress select separator)",
+      "Bash(ls scripts/*.ts)"
     ],
     "defaultMode": "acceptEdits"
   }
