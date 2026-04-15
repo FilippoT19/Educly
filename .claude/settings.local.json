@@ -25,7 +25,12 @@
       "Bash(grep -l \"CREATE TABLE.*exercises\" /Users/filippotopinelli/Desktop/Educly/supabase/*.sql)",
       "Bash(grep -n \"exercises\" /Users/filippotopinelli/Desktop/Educly/supabase/*.sql)",
       "Bash(grep -n priority /Users/filippotopinelli/Desktop/Educly/src/app/api/admin/*.ts)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(git merge:*)",
+      "Bash(git stash:*)",
+      "Bash(printf \"y\\\\ny\\\\n\")",
+      "Bash(npx shadcn@latest init --preset b1Ymqvgiu --template next)",
+      "Bash(yes)"
     ],
     "defaultMode": "acceptEdits"
   }
