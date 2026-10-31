@@ -4,9 +4,9 @@ An AI-powered study app for STEM university students.
 Built for students at Politecnico di Milano.
 
 ## The problem
-Most study tools help you find answers. Educly focuses on 
-the reasoning process — extracting exercises from real 
-textbooks and giving feedback on *how* you solve, not 
+Most study tools help you find answers. Educly focuses on
+the reasoning process — extracting exercises from real
+textbooks and giving feedback on *how* you solve, not
 just whether you got it right.
 
 ## Features
