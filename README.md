@@ -1,6 +1,6 @@
 # Educly
 
-An AI-powered study app for STEM university students. 
+An AI-powered study app for STEM university students.
 Built for students at Politecnico di Milano.
 
 ## The problem
